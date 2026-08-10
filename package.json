@@ -1,0 +1,22 @@
+{
+  "name": "truck-save-editor",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "package": "turbo run package",
+    "app": "turbo run build && node packages/server/dist/index.js",
+    "dev:web": "pnpm --filter @truck/web dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "turbo": "^2.6.1",
+    "typescript": "^7.0.2"
+  }
+}
