@@ -1,0 +1,21 @@
+{
+  "name": "@truck/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.ts",
+    "package": "node scripts/package.mjs"
+  },
+  "dependencies": {
+    "@truck/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@truck/web": "workspace:*",
+    "@types/node": "^24.10.1",
+    "typescript": "^7.0.2"
+  }
+}
