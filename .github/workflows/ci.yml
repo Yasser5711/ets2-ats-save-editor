@@ -1,0 +1,76 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm package
+
+      - name: smoke test the executable
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath release/truck-save-editor.exe -WorkingDirectory release -PassThru
+          try {
+            $ready = $false
+            foreach ($attempt in 1..20) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri http://127.0.0.1:7311/api/env -UseBasicParsing
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch { }
+            }
+            if (-not $ready) { throw "server did not answer on port 7311" }
+          } finally {
+            Stop-Process -Id $proc.Id -Force
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: truck-save-editor-windows
+          path: release
