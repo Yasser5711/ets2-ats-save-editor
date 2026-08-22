@@ -1,5 +1,4 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 import { existsSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -8,92 +7,85 @@ import { listProfiles, readGameLog } from "../src/games.ts";
 
 const ROOT = fileURLToPath(new URL("../../../sandbox/Euro Truck Simulator 2", import.meta.url));
 const SLOT = join(ROOT, "profiles/556C5F746F75746F75636865/save/1");
-const skip = !existsSync(join(SLOT, "game.sii"));
+const hasSandbox = existsSync(join(SLOT, "game.sii"));
 
-test("profile listing decodes hex folder names and reads slot titles", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("profile listing decodes hex folder names and reads slot titles", () => {
   const profiles = listProfiles(ROOT);
   const profile = profiles.find((p) => p.name === "Ul_toutouche");
-  assert.ok(profile, "profile name is hex-decoded");
-  assert.ok(profile.slots.length > 5);
-  assert.ok(profile.slots.every((s) => s.bytes > 0 && s.modified.length > 0));
+  expect(profile, "profile name is hex-decoded").toBeTruthy();
+  expect(profile.slots.length > 5).toBeTruthy();
+  expect(profile.slots.every((s) => s.bytes > 0 && s.modified.length > 0)).toBeTruthy();
 });
 
-test("save detail exposes garages, trucks and validation", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("save detail exposes garages, trucks and validation", () => {
   const detail = saveDetail(SLOT);
-  assert.equal(detail.problems.length, 0);
-  assert.equal(detail.garages.length, detail.summary.garagesTotal);
-  assert.ok(detail.trucks.length >= 1);
-  assert.ok(detail.trucks.every((row) => row.model !== ""));
-  assert.ok(detail.cities > 100);
+  expect(detail.problems.length).toBe(0);
+  expect(detail.garages.length).toBe(detail.summary.garagesTotal);
+  expect(detail.trucks.length >= 1).toBeTruthy();
+  expect(detail.trucks.every((row) => row.model !== "")).toBeTruthy();
+  expect(detail.cities > 100).toBeTruthy();
 });
 
-test("planning never touches the file on disk", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("planning never touches the file on disk", () => {
   const before = saveDetail(SLOT).summary.money;
   const plan = planOps(SLOT, { edits: { money: 1 } });
-  assert.match(plan.log[0], /money_account/);
-  assert.equal(plan.summary.money, "1");
-  assert.equal(saveDetail(SLOT).summary.money, before);
+  expect(plan.log[0]).toMatch(/money_account/);
+  expect(plan.summary.money).toBe("1");
+  expect(saveDetail(SLOT).summary.money).toBe(before);
 });
 
-test("applying refuses inconsistent edits and leaves the save alone", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("applying refuses inconsistent edits and leaves the save alone", () => {
   const target = cloneSlot(SLOT, "api refusal test");
   try {
     const money = saveDetail(target).summary.money;
     const result = applyOps(target, {
       fields: [{ unitId: "garage.istanbul", key: "status", value: "6" }],
     });
-    assert.equal(result.written, false);
-    assert.ok(result.problems.some((p) => p.includes("slots")));
-    assert.equal(saveDetail(target).summary.money, money);
+    expect(result.written).toBe(false);
+    expect(result.problems.some((p) => p.includes("slots"))).toBeTruthy();
+    expect(saveDetail(target).summary.money).toBe(money);
   } finally {
     rmSync(target, { recursive: true, force: true });
   }
 });
 
-test("applying writes, backs up and restores", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("applying writes, backs up and restores", () => {
   const target = cloneSlot(SLOT, "api write test");
   try {
     const original = saveDetail(target).summary.money;
     const result = applyOps(target, { edits: { money: 4242 } });
-    assert.equal(result.written, true);
-    assert.equal(saveDetail(target).summary.money, "4242");
+    expect(result.written).toBe(true);
+    expect(saveDetail(target).summary.money).toBe("4242");
     const backups = backupsOf(target);
-    assert.equal(backups.length, 1);
+    expect(backups.length).toBe(1);
     restoreBackup(target, backups[0].file);
-    assert.equal(saveDetail(target).summary.money, original);
+    expect(saveDetail(target).summary.money).toBe(original);
   } finally {
     rmSync(target, { recursive: true, force: true });
   }
 });
 
-test("cloning creates a fresh numbered slot with a new title", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("cloning creates a fresh numbered slot with a new title", () => {
   const target = cloneSlot(SLOT, "api clone name");
   try {
-    assert.ok(existsSync(join(target, "game.sii")));
+    expect(existsSync(join(target, "game.sii"))).toBeTruthy();
     const slots = listProfiles(ROOT).flatMap((p) => p.slots);
-    assert.ok(slots.some((s) => s.name === "api clone name"));
+    expect(slots.some((s) => s.name === "api clone name")).toBeTruthy();
   } finally {
     rmSync(target, { recursive: true, force: true });
   }
 });
 
-test("unit search filters by class and returns editable lines", (t) => {
-  if (skip) return t.skip("sandbox missing");
+test.skipIf(!hasSandbox)("unit search filters by class and returns editable lines", () => {
   const found = searchUnits(SLOT, "garage.istanbul");
-  assert.equal(found.hits.length, 1);
-  assert.equal(found.hits[0].cls, "garage");
-  assert.ok(found.hits[0].lines.some((l) => l.key === "status"));
-  assert.ok(found.total > 1000);
+  expect(found.hits.length).toBe(1);
+  expect(found.hits[0].cls).toBe("garage");
+  expect(found.hits[0].lines.some((l) => l.key === "status")).toBeTruthy();
+  expect(found.total > 1000).toBeTruthy();
 });
 
-test("log doctor annotates known crash signatures", (t) => {
+test("log doctor annotates known crash signatures", () => {
   const issues = readGameLog(ROOT);
-  assert.ok(Array.isArray(issues));
-  for (const issue of issues) assert.ok(issue.text.length > 0);
+  expect(Array.isArray(issues)).toBeTruthy();
+  for (const issue of issues) expect(issue.text.length > 0).toBeTruthy();
 });

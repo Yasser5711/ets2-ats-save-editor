@@ -1,5 +1,4 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { decodeBsii, formatFloat, decodeToken } from "../src/bsii.ts";
@@ -49,101 +48,96 @@ const SANDBOX = fileURLToPath(
     import.meta.url,
   ),
 );
+const hasSandbox = existsSync(SANDBOX);
 
 test("decodes the documented reference BSII file exactly", () => {
   const buf = Buffer.from(REFERENCE_HEX.replace(/\s+/g, ""), "hex");
   const doc = decodeBsii(buf);
-  assert.equal(doc.version, 2);
-  assert.equal(stringifySii(doc), REFERENCE_TEXT);
+  expect(doc.version).toBe(2);
+  expect(stringifySii(doc)).toBe(REFERENCE_TEXT);
 });
 
 test("nameless ids keep four hex digits after the leading group", () => {
   const buf = Buffer.from(REFERENCE_HEX.replace(/\s+/g, ""), "hex");
   const ids = decodeBsii(buf).units.map((u) => u.id);
-  assert.deepEqual(ids, ["_nameless.807.0605.0403.0201", "_nameless.fffe.fdfc.fbfa.f9f8"]);
+  expect(ids).toEqual(["_nameless.807.0605.0403.0201", "_nameless.fffe.fdfc.fbfa.f9f8"]);
 });
 
 test("floats use decimal form when integral and hex bits otherwise", () => {
-  assert.equal(formatFloat(1), "1");
-  assert.equal(formatFloat(-2048), "-2048");
-  assert.equal(formatFloat(0.1), "&3dcccccd");
-  assert.equal(formatFloat(1e8), "&4cbebc20");
+  expect(formatFloat(1)).toBe("1");
+  expect(formatFloat(-2048)).toBe("-2048");
+  expect(formatFloat(0.1)).toBe("&3dcccccd");
+  expect(formatFloat(1e8)).toBe("&4cbebc20");
 });
 
 test("tokens decode from base-38 identifiers", () => {
-  assert.equal(decodeToken(0n), "");
+  expect(decodeToken(0n)).toBe("");
   // single characters map to their 1-based index in "0-9a-z_"
-  assert.equal(decodeToken(11n), "a");
+  expect(decodeToken(11n)).toBe("a");
   // "truck" folded back to front: ((((21*38+13)*38+31)*38+28)*38+30)
-  assert.equal(decodeToken(44547050n), "truck");
+  expect(decodeToken(44547050n)).toBe("truck");
   // bit 63 belongs to the game and must not leak into the identifier
-  assert.equal(decodeToken(44547050n | (1n << 63n)), "truck");
+  expect(decodeToken(44547050n | (1n << 63n))).toBe("truck");
 });
 
-test("ScsC container round-trips through re-encryption", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("ScsC container round-trips through re-encryption", () => {
   const raw = readFileSync(SANDBOX);
-  assert.equal(detectKind(raw), "encrypted");
+  expect(detectKind(raw)).toBe("encrypted");
   const payload = decryptScsC(raw);
   const again = decryptScsC(encryptScsC(payload));
-  assert.ok(payload.equals(again));
+  expect(payload.equals(again)).toBeTruthy();
 });
 
-test("real save decodes, re-parses and keeps every unit", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("real save decodes, re-parses and keeps every unit", () => {
   const doc = decodeBsii(decryptScsC(readFileSync(SANDBOX)));
   const text = stringifySii(doc);
   const reparsed = parseSii(text);
-  assert.equal(reparsed.units.length, doc.units.length);
-  assert.equal(stringifySii(reparsed), text);
+  expect(reparsed.units.length).toBe(doc.units.length);
+  expect(stringifySii(reparsed)).toBe(text);
 });
 
-test("edits land on the fields the game reads back", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("edits land on the fields the game reads back", () => {
   const doc = loadSii(SANDBOX).doc;
   applyPlan(doc, { money: 1234567, experience: 42, maxSkills: true, garageStatus: 3 });
   const after = summarize(doc);
-  assert.equal(after.money, "1234567");
-  assert.equal(after.experience, "42");
-  assert.equal(after.adr, "63");
-  assert.equal(after.garagesOwned, after.garagesTotal);
+  expect(after.money).toBe("1234567");
+  expect(after.experience).toBe("42");
+  expect(after.adr).toBe("63");
+  expect(after.garagesOwned).toBe(after.garagesTotal);
   // the mutation must survive a text round-trip, which is how the game reads it
   const reloaded = parseSii(stringifySii(doc));
   const idx = new SiiIndex(reloaded);
-  assert.equal(get(idx.follow(idx.one("economy"), "bank"), "money_account"), "1234567");
+  expect(get(idx.follow(idx.one("economy"), "bank"), "money_account")).toBe("1234567");
 });
 
-test("garage resizing keeps slot arrays consistent and preserves parked trucks", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("garage resizing keeps slot arrays consistent and preserves parked trucks", () => {
   const doc = loadSii(SANDBOX).doc;
-  assert.deepEqual(validate(doc), []);
+  expect(validate(doc)).toEqual([]);
 
   const before = new SiiIndex(doc);
   const hq = before.byIdOrNull("garage.istanbul");
-  assert.ok(hq, "expected the sandbox save to own garage.istanbul");
+  expect(hq, "expected the sandbox save to own garage.istanbul").toBeTruthy();
   const parked = getArray(hq, "vehicles").filter((v) => v !== "null");
   const hired = getArray(hq, "drivers").filter((d) => d !== "null");
-  assert.ok(parked.length > 0 && hired.length > 0);
+  expect(parked.length > 0 && hired.length > 0).toBeTruthy();
 
   applyPlan(doc, { garageStatus: 3 });
   // an empty drivers array is what crashed the garage screen, so this must hold
-  assert.deepEqual(validate(doc), []);
+  expect(validate(doc)).toEqual([]);
   for (const g of new SiiIndex(doc).all("garage")) {
-    assert.equal(getArray(g, "vehicles").length, GARAGE_CAPACITY["3"]);
-    assert.equal(getArray(g, "drivers").length, GARAGE_CAPACITY["3"]);
+    expect(getArray(g, "vehicles").length).toBe(GARAGE_CAPACITY["3"]);
+    expect(getArray(g, "drivers").length).toBe(GARAGE_CAPACITY["3"]);
   }
   const after = new SiiIndex(doc).byIdOrNull("garage.istanbul");
-  assert.ok(after);
-  assert.deepEqual(
-    getArray(after, "vehicles").filter((v) => v !== "null"),
-    parked,
-  );
-  assert.deepEqual(
-    getArray(after, "drivers").filter((d) => d !== "null"),
-    hired,
-  );
+  expect(after).toBeTruthy();
+  expect(
+    getArray(after, "vehicles").filter((v) => v !== "null")).toEqual(
+    parked);
+  expect(
+    getArray(after, "drivers").filter((d) => d !== "null")).toEqual(
+    hired);
 
   // shrinking below the occupied slot count must leave that garage alone
   applyPlan(doc, { garageStatus: 6 });
-  assert.deepEqual(validate(doc), []);
+  expect(validate(doc)).toEqual([]);
 });
