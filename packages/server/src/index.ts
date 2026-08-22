@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, extname, join, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   applyOps,
@@ -17,9 +17,10 @@ import {
 } from "./api.ts";
 
 declare global {
-  var __WEB_ASSETS: Record<string, string> | undefined;
+  var __WEB_ASSETS: Record<string, string> | undefined; // eslint-disable-line no-underscore-dangle -- injected by the packaged build
 }
 
+// eslint-disable-next-line no-underscore-dangle -- injected by the packaged build
 const EMBEDDED = globalThis.__WEB_ASSETS;
 const WEB_ROOT =
   [
@@ -119,6 +120,5 @@ export function startServer(port: number): Promise<number> {
 }
 
 const port = Number(process.env.PORT ?? 7311);
-startServer(port).then((bound) => {
-  console.log(`save editor ready: http://127.0.0.1:${bound}`);
-});
+const bound = await startServer(port);
+console.log(`save editor ready: http://127.0.0.1:${bound}`);

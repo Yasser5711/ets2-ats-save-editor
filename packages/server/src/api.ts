@@ -125,8 +125,8 @@ export function saveDetail(path: string) {
     cities: allCities(loaded.doc).length,
     drivers: getArray(player, "drivers").length,
     driverPool: getArray(economy, "driver_pool").length,
-    garages: garages.sort((a, b) => a.city.localeCompare(b.city)),
-    trucks: trucks.sort((a, b) => a.garage.localeCompare(b.garage)),
+    garages: garages.toSorted((a, b) => a.city.localeCompare(b.city)),
+    trucks: trucks.toSorted((a, b) => a.garage.localeCompare(b.garage)),
     problems: validate(loaded.doc),
   };
 }
@@ -171,7 +171,7 @@ export function backupsOf(slotPath: string): { file: string; modified: string; b
       const stat = statSync(join(dir, f));
       return { file: f, modified: stat.mtime.toISOString(), bytes: stat.size };
     })
-    .sort((a, b) => b.modified.localeCompare(a.modified));
+    .toSorted((a, b) => b.modified.localeCompare(a.modified));
 }
 
 function backupSlot(slotPath: string): string {
@@ -248,7 +248,10 @@ export function exportText(path: string): string {
 
 export async function environment() {
   const roots = detectRoots();
-  for (const root of roots) root.running = await isRunning(root.id);
+  const running = await Promise.all(roots.map((root) => isRunning(root.id)));
+  roots.forEach((root, i) => {
+    root.running = running[i];
+  });
   return { roots, games: GAMES.map((g) => ({ id: g.id, name: g.name })) };
 }
 

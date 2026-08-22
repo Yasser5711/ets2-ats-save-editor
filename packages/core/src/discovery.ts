@@ -18,7 +18,7 @@ export function allCities(doc: SiiDocument): string[] {
     const city = g.id.replace(/^garage\./, "");
     if (city !== "" && !city.startsWith("_")) cities.add(city);
   }
-  return [...cities].sort();
+  return [...cities].toSorted();
 }
 
 export function visitAllCities(doc: SiiDocument): string[] {

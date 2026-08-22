@@ -17,11 +17,13 @@ export function RawTab({ path, ops, setOps }: Props) {
 
   useEffect(() => {
     let alive = true;
-    api.units(path, query).then((result) => {
+    const search = async () => {
+      const result = await api.units(path, query);
       if (!alive) return;
       setHits(result.hits);
       setTotal(result.total);
-    });
+    };
+    void search();
     return () => {
       alive = false;
     };

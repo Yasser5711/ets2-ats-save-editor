@@ -110,7 +110,7 @@ function readSlots(profileDir: string): SaveSlot[] {
       encrypted,
     });
   }
-  return slots.sort((a, b) => b.modified.localeCompare(a.modified));
+  return slots.toSorted((a, b) => b.modified.localeCompare(a.modified));
 }
 
 export function listProfiles(root: string): Profile[] {
@@ -165,5 +165,5 @@ export function readGameLog(root: string, limit = 40): LogIssue[] {
       hint: HINTS.find(([re]) => re.test(body))?.[1] ?? null,
     });
   }
-  return issues.slice(-limit).reverse();
+  return issues.slice(-limit).toReversed();
 }

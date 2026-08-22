@@ -8,8 +8,11 @@ export function DoctorTab({ root, path }: { root: GameRoot | null; path: string 
   const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = () => {
-    if (root) api.log(root.path).then(setIssues);
-    api.backups(path).then(setBackups);
+    const load = async () => {
+      if (root) setIssues(await api.log(root.path));
+      setBackups(await api.backups(path));
+    };
+    load().catch((e: Error) => setNotice(e.message));
   };
 
   useEffect(refresh, [root, path]);
@@ -25,12 +28,13 @@ export function DoctorTab({ root, path }: { root: GameRoot | null; path: string 
               <span className="text-slate-500">{(b.bytes / 1048576).toFixed(1)} MB</span>
               <Button
                 tone="danger"
-                onClick={() =>
-                  api
-                    .restore(path, b.file)
-                    .then(() => setNotice(`restored ${b.file}`))
-                    .catch((e: Error) => setNotice(e.message))
-                }
+                onClick={() => {
+                  const restore = async () => {
+                    await api.restore(path, b.file);
+                    setNotice(`restored ${b.file}`);
+                  };
+                  restore().catch((e: Error) => setNotice(e.message));
+                }}
               >
                 restore
               </Button>

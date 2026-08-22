@@ -66,7 +66,7 @@ function collectTemplates(idx: SiiIndex): Template[] {
     const previous = byModel.get(model);
     if (!previous || power > previous.power) byModel.set(model, { vehicle, model, power });
   }
-  return [...byModel.values()].sort((a, b) => b.power - a.power);
+  return [...byModel.values()].toSorted((a, b) => b.power - a.power);
 }
 
 function cloneTruck(doc: SiiDocument, idx: SiiIndex, template: Template, ids: IdAllocator): Unit {
@@ -183,7 +183,7 @@ export function staffGarages(doc: SiiDocument, options: StaffOptions = {}): stri
     }
   }
 
-  const models = [...usedModels.entries()].sort((a, b) => b[1] - a[1]);
+  const models = [...usedModels.entries()].toSorted((a, b) => b[1] - a[1]);
   return [
     `parked ${parked} cloned trucks (${doc.units.length} units in save)`,
     `hired ${hired.length} drivers on the payroll, ${freeDrivers.length} applicants left in the pool`,

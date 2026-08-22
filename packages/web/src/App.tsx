@@ -25,13 +25,12 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .env()
-      .then((env) => {
-        setRoots(env.roots);
-        setRoot(env.roots[0] ?? null);
-      })
-      .catch((e: Error) => setError(e.message));
+    const load = async () => {
+      const env = await api.env();
+      setRoots(env.roots);
+      setRoot(env.roots[0] ?? null);
+    };
+    load().catch((e: Error) => setError(e.message));
   }, []);
 
   useEffect(() => {
@@ -65,17 +64,20 @@ export function App() {
   );
 
   useEffect(() => {
-    if (!slotPath || !dirty) {
-      setPlan(null);
-      return;
-    }
+    if (!slotPath || !dirty) return;
     let alive = true;
     setBusy("previewing");
-    api
-      .plan(slotPath, ops)
-      .then((result) => alive && setPlan(result))
-      .catch((e: Error) => alive && setError(e.message))
-      .finally(() => alive && setBusy(null));
+    const preview = async () => {
+      try {
+        const result = await api.plan(slotPath, ops);
+        if (alive) setPlan(result);
+      } catch (e) {
+        if (alive) setError((e as Error).message);
+      } finally {
+        if (alive) setBusy(null);
+      }
+    };
+    void preview();
     return () => {
       alive = false;
     };
@@ -85,22 +87,20 @@ export function App() {
     if (!slotPath) return;
     setBusy(cloneAs ? "writing new slot" : "writing save");
     setError(null);
-    api
-      .apply(slotPath, ops, cloneAs)
-      .then((result) => {
-        if (!result.written) {
-          setError(`refused: ${result.problems.slice(0, 3).join("; ")}`);
-          return;
-        }
-        setNotice(
-          cloneAs
-            ? `written to a new slot: ${result.target}`
-            : `written, backup kept as backups/${result.backup}`,
-        );
-        setOps({});
-        loadSlot(cloneAs ? result.target : slotPath);
-        if (root) api.profiles(root.path).then(setProfiles);
-      })
+    const write = async () => {
+      const result = await api.apply(slotPath, ops, cloneAs);
+      if (!result.written) {
+        setError(`refused: ${result.problems.slice(0, 3).join("; ")}`);
+        return;
+      }
+      setNotice(
+        cloneAs ? `written to a new slot: ${result.target}` : `written, backup kept as backups/${result.backup}`,
+      );
+      setOps({});
+      loadSlot(cloneAs ? result.target : slotPath);
+      if (root) setProfiles(await api.profiles(root.path));
+    };
+    write()
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(null));
   };
@@ -245,7 +245,7 @@ export function App() {
                 }
               >
                 {!dirty && <div className="text-sm text-slate-500">No changes staged.</div>}
-                {plan && (
+                {dirty && plan && (
                   <div className="space-y-2">
                     {plan.problems.length > 0 && (
                       <div className="rounded-md border border-red-800 bg-red-950/50 p-2 text-xs text-red-200">
