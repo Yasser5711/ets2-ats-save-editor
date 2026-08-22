@@ -4,7 +4,8 @@ Save editor for **Euro Truck Simulator 2** and **American Truck Simulator**. It 
 `ScsC` container, decodes the binary `BSII` payload, edits the save through game-aware
 operations, and refuses to write anything that would crash the game.
 
-![tests](https://img.shields.io/badge/tests-21%20passing-brightgreen)
+![tests](https://img.shields.io/badge/vitest-21%20passing-brightgreen)
+![lint](https://img.shields.io/badge/oxlint-clean-brightgreen)
 ![node](https://img.shields.io/badge/node-24-blue)
 
 ## Why another one
@@ -47,8 +48,9 @@ pnpm app            # http://127.0.0.1:7311
 Other tasks:
 
 ```bash
-pnpm test           # 21 tests across core and server
+pnpm test           # vitest, 21 tests across core and server
 pnpm typecheck      # tsc across every package
+pnpm lint           # oxlint
 pnpm dev:web        # Vite with HMR against a running server
 pnpm package        # release/truck-save-editor.exe (UI embedded, single file)
 ```
