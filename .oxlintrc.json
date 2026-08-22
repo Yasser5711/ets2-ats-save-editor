@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "react", "promise", "import", "node"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn",
+    "pedantic": "off"
+  },
+  "env": {
+    "builtin": true,
+    "es2024": true,
+    "node": true
+  },
+  "rules": {
+    "no-console": "off",
+    "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-imports": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "promise/prefer-await-to-then": "off",
+    "import/no-cycle": "error"
+  },
+  "overrides": [
+    {
+      "files": ["packages/web/**/*.tsx", "packages/web/**/*.ts"],
+      "env": { "browser": true },
+      "rules": {
+        "react/react-in-jsx-scope": "off",
+        "react/set-state-in-effect": "warn",
+        "import/no-unassigned-import": "off"
+      }
+    },
+    {
+      "files": ["**/test/**/*.ts"],
+      "rules": {
+        "typescript/no-non-null-assertion": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["**/dist/**", "release/**", "sandbox/**"]
+}

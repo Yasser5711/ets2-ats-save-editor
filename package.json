@@ -12,11 +12,15 @@
     "typecheck": "turbo run typecheck",
     "package": "turbo run package",
     "app": "turbo run build && node packages/server/dist/index.js",
-    "dev:web": "pnpm --filter @truck/web dev"
+    "dev:web": "pnpm --filter @truck/web dev",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "oxlint": "^1.79.0",
     "turbo": "^2.6.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

@@ -7,8 +7,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test test/*.test.ts",
-    "package": "node scripts/package.mjs"
+    "test": "vitest run",
+    "package": "node scripts/package.mjs",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@truck/core": "workspace:*"
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@truck/web": "workspace:*",
     "@types/node": "^24.10.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }
