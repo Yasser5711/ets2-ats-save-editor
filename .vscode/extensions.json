@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "oxc.oxc-vscode",
+    "vitest.explorer",
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "github.vscode-github-actions",
+    "ms-vscode.vscode-typescript-next"
+  ],
+  "unwantedRecommendations": ["dbaeumer.vscode-eslint"]
+}
