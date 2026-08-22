@@ -55,17 +55,21 @@ jobs:
       - name: smoke test the executable
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath release/truck-save-editor.exe -WorkingDirectory release -PassThru
+          $solo = New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/solo" -Force
+          Copy-Item release/truck-save-editor.exe $solo
+          $proc = Start-Process -FilePath "$solo/truck-save-editor.exe" -WorkingDirectory $solo -PassThru
           try {
-            $ready = $false
+            $page = $null
             foreach ($attempt in 1..20) {
               Start-Sleep -Seconds 1
               try {
-                $response = Invoke-WebRequest -Uri http://127.0.0.1:7311/api/env -UseBasicParsing
-                if ($response.StatusCode -eq 200) { $ready = $true; break }
-              } catch { }
+                $page = Invoke-WebRequest -Uri http://127.0.0.1:7311/ -UseBasicParsing
+                if ($page.StatusCode -eq 200) { break }
+              } catch { $page = $null }
             }
-            if (-not $ready) { throw "server did not answer on port 7311" }
+            if ($null -eq $page) { throw "server did not answer on port 7311" }
+            if ($page.Content -notmatch "Truck Save Editor") { throw "the ui was not embedded in the executable" }
+            Invoke-WebRequest -Uri http://127.0.0.1:7311/api/env -UseBasicParsing | Out-Null
           } finally {
             Stop-Process -Id $proc.Id -Force
           }
@@ -73,4 +77,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: truck-save-editor-windows
-          path: release
+          path: release/truck-save-editor.exe
