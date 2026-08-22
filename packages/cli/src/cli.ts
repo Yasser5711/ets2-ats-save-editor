@@ -17,7 +17,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { applyPlan, discoverySummary, type EditPlan, find, GARAGE_LARGE, get, loadSii, mergeDiscovery, saveSiiAsText, set, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, validate, visitAllCities } from "@truck/core";
+import { applyPlan, discoverySummary, type EditPlan, find, GARAGE_LARGE, loadSii, mergeDiscovery, saveSiiAsText, set, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, validate, visitAllCities } from "@truck/core";
 
 const DEFAULT_DOCS = join(homedir(), "Documents", "Euro Truck Simulator 2");
 
@@ -91,6 +91,10 @@ interface EditArgs {
   staff: StaffOptions | null;
 }
 
+function patchStaff(current: StaffOptions | null, patch: Partial<StaffOptions>): StaffOptions {
+  return current === null ? { ...patch } : { ...current, ...patch };
+}
+
 function parseArgs(args: string[]): EditArgs {
   const plan: EditPlan = {};
   let dryRun = false;
@@ -135,16 +139,16 @@ function parseArgs(args: string[]): EditArgs {
         if (discoveryDonor === undefined) throw new Error("--import-discovery needs a donor save");
         break;
       case "--staff-garages":
-        staff = { ...(staff ?? {}) };
+        staff = patchStaff(staff, {});
         break;
       case "--no-drivers":
-        staff = { ...(staff ?? {}), withDrivers: false };
+        staff = patchStaff(staff, { withDrivers: false });
         break;
       case "--seed":
-        staff = { ...(staff ?? {}), seed: num() };
+        staff = patchStaff(staff, { seed: num() });
         break;
       case "--staff-limit":
-        staff = { ...(staff ?? {}), limit: num() };
+        staff = patchStaff(staff, { limit: num() });
         break;
       case "--dry-run":
         dryRun = true;

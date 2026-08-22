@@ -11,6 +11,8 @@ interface Props {
 export function FleetTab({ detail, ops, setOps }: Props) {
   const [filter, setFilter] = useState("");
   const staff = ops.staff ?? null;
+  const patchStaff = (patch: Partial<NonNullable<Ops["staff"]>>) =>
+    setOps({ ...ops, staff: staff === null ? { ...patch } : { ...staff, ...patch } });
   const rows = detail.trucks.filter(
     (t) => t.model.includes(filter.toLowerCase()) || t.garage.includes(filter.toLowerCase()),
   );
@@ -31,7 +33,7 @@ export function FleetTab({ detail, ops, setOps }: Props) {
               label="hire a driver for each truck"
               hint="drivers go on the payroll and take 1-2 in-game days before their first job"
               checked={staff !== null && staff.withDrivers !== false}
-              onChange={(on) => setOps({ ...ops, staff: { ...(staff ?? {}), withDrivers: on } })}
+              onChange={(on) => patchStaff({ withDrivers: on })}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -39,13 +41,13 @@ export function FleetTab({ detail, ops, setOps }: Props) {
               label="seed"
               placeholder="20260823"
               value={staff?.seed?.toString() ?? ""}
-              onChange={(v) => setOps({ ...ops, staff: { ...(staff ?? {}), seed: v === "" ? undefined : Number(v) } })}
+              onChange={(v) => patchStaff({ seed: v === "" ? undefined : Number(v) })}
             />
             <NumberField
               label="max garages"
               placeholder="all"
               value={staff?.limit?.toString() ?? ""}
-              onChange={(v) => setOps({ ...ops, staff: { ...(staff ?? {}), limit: v === "" ? undefined : Number(v) } })}
+              onChange={(v) => patchStaff({ limit: v === "" ? undefined : Number(v) })}
             />
           </div>
         </div>

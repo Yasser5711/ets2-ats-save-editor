@@ -42,7 +42,7 @@ export function GaragesTab({ detail, ops, setOps }: Props) {
                 setOps({
                   ...ops,
                   edits: {
-                    ...(ops.edits ?? {}),
+                    ...ops.edits,
                     garageStatus: chosen === size.status ? undefined : size.status,
                   },
                 })
