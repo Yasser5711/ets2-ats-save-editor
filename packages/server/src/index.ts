@@ -16,12 +16,16 @@ import {
   type Ops,
 } from "./api.ts";
 
+declare global {
+  var __WEB_ASSETS: Record<string, string> | undefined;
+}
+
+const EMBEDDED = globalThis.__WEB_ASSETS;
 const WEB_ROOT =
   [
-    join(dirname(process.execPath), "web"),
     join(process.cwd(), "packages", "web", "dist"),
     resolve(fileURLToPath(new URL("../../web/dist", import.meta.url))),
-  ].find((candidate) => existsSync(join(candidate, "index.html"))) ?? "web";
+  ].find((candidate) => existsSync(join(candidate, "index.html"))) ?? "";
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -82,11 +86,19 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
 }
 
 function serveStatic(res: ServerResponse, pathname: string): void {
-  const file = pathname === "/" ? "index.html" : pathname.slice(1);
-  const target = join(WEB_ROOT, file);
+  const requested = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
+  if (EMBEDDED) {
+    const name = EMBEDDED[requested] === undefined ? "index.html" : requested;
+    const payload = EMBEDDED[name];
+    if (payload === undefined) return send(res, 500, "no web assets were embedded in this build");
+    res.writeHead(200, { "content-type": MIME[extname(name)] ?? "application/octet-stream" });
+    res.end(Buffer.from(payload, "base64"));
+    return;
+  }
+  const target = join(WEB_ROOT, requested);
   const chosen = existsSync(target) && extname(target) !== "" ? target : join(WEB_ROOT, "index.html");
-  if (!existsSync(chosen)) {
-    return send(res, 500, "web/dist is missing - run `pnpm build` first");
+  if (WEB_ROOT === "" || !existsSync(chosen)) {
+    return send(res, 500, "web assets are missing - run `pnpm build` first");
   }
   res.writeHead(200, { "content-type": MIME[extname(chosen)] ?? "application/octet-stream" });
   res.end(readFileSync(chosen));

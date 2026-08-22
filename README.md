@@ -50,11 +50,12 @@ Other tasks:
 pnpm test           # 21 tests across core and server
 pnpm typecheck      # tsc across every package
 pnpm dev:web        # Vite with HMR against a running server
-pnpm package        # release/truck-save-editor.exe + release/web
+pnpm package        # release/truck-save-editor.exe (UI embedded, single file)
 ```
 
-The packaged build needs no Node installed: unzip, run the executable, open the printed URL.
-Prebuilt Windows bundles are attached to every [release](../../releases).
+The packaged build is a single self-contained executable - the interface is embedded in the
+binary, so there is nothing to unzip and no Node install needed. Run it, open the printed URL.
+Every [release](../../releases) has the executable attached.
 
 ## CLI
 
@@ -72,7 +73,7 @@ node packages/cli/dist/cli.js decode "<file>" out.txt
 ```
 packages/core     ScsC crypto, BSII v1-3 decoder, SiiNunit model, edit operations, validator
 packages/cli      command line front end
-packages/server   local HTTP API, profile discovery, backups, log triage
+packages/server   local HTTP API, profile discovery, backups, log triage, exe packaging
 packages/web      React + Tailwind interface
 ```
 
