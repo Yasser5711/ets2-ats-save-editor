@@ -1,5 +1,4 @@
-import { test } from "node:test";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SiiIndex, get, getArray, parseSii, stringifySii } from "../src/model.ts";
@@ -15,15 +14,15 @@ const SANDBOX = fileURLToPath(
     import.meta.url,
   ),
 );
+const hasSandbox = existsSync(SANDBOX);
 
 test("nameless ids round-trip through their 64-bit value", () => {
-  assert.equal(namelessValue("_nameless.2b6.8e3e.d7f8"), 0x02b68e3ed7f8n);
-  assert.equal(namelessId(0x02b68e3ed7f8n), "_nameless.2b6.8e3e.d7f8");
-  assert.equal(namelessValue("garage.berlin"), null);
+  expect(namelessValue("_nameless.2b6.8e3e.d7f8")).toBe(0x02b68e3ed7f8n);
+  expect(namelessId(0x02b68e3ed7f8n)).toBe("_nameless.2b6.8e3e.d7f8");
+  expect(namelessValue("garage.berlin")).toBe(null);
 });
 
-test("the id allocator stays above every id already in the save", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("the id allocator stays above every id already in the save", () => {
   const doc = loadSii(SANDBOX).doc;
   let max = 0n;
   for (const u of doc.units) {
@@ -32,26 +31,24 @@ test("the id allocator stays above every id already in the save", (t) => {
   }
   const ids = new IdAllocator(doc);
   const minted = [ids.take(), ids.take(), ids.take()];
-  assert.equal(new Set(minted).size, 3);
-  for (const id of minted) assert.ok((namelessValue(id) as bigint) > max);
+  expect(new Set(minted).size).toBe(3);
+  for (const id of minted) expect((namelessValue(id) as bigint) > max).toBeTruthy();
 });
 
-test("visiting all cities fills the city arrays from the save's own garages", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("visiting all cities fills the city arrays from the save's own garages", () => {
   const doc = loadSii(SANDBOX).doc;
   visitAllCities(doc);
   const economy = new SiiIndex(doc).one("economy");
   const cities = allCities(doc);
-  assert.ok(cities.length > 100);
-  assert.deepEqual(getArray(economy, "visited_cities"), cities);
-  assert.equal(get(economy, "visited_cities_count"), String(cities.length));
-  assert.deepEqual(getArray(economy, "unlocked_dealers"), cities);
-  assert.deepEqual(getArray(economy, "unlocked_recruitments"), cities);
-  assert.deepEqual(validate(doc), []);
+  expect(cities.length > 100).toBeTruthy();
+  expect(getArray(economy, "visited_cities")).toEqual(cities);
+  expect(get(economy, "visited_cities_count")).toBe(String(cities.length));
+  expect(getArray(economy, "unlocked_dealers")).toEqual(cities);
+  expect(getArray(economy, "unlocked_recruitments")).toEqual(cities);
+  expect(validate(doc)).toEqual([]);
 });
 
-test("merging discovery unions item ids without dropping our own", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("merging discovery unions item ids without dropping our own", () => {
   const doc = loadSii(SANDBOX).doc;
   const economy = new SiiIndex(doc).one("economy");
   const mine = getArray(economy, "discovered_items");
@@ -74,13 +71,12 @@ test("merging discovery unions item ids without dropping our own", (t) => {
   );
   mergeDiscovery(doc, donor);
   const after = getArray(economy, "discovered_items");
-  assert.equal(after.length, mine.length + 2);
-  assert.ok(after.includes("42") && after.includes("43"));
-  for (const uid of mine) assert.ok(after.includes(uid));
+  expect(after.length).toBe(mine.length + 2);
+  expect(after.includes("42") && after.includes("43")).toBeTruthy();
+  for (const uid of mine) expect(after.includes(uid)).toBeTruthy();
 });
 
-test("staffing garages parks unique cloned trucks and hires unique drivers", (t) => {
-  if (!existsSync(SANDBOX)) return t.skip("sandbox save not present");
+test.skipIf(!hasSandbox)("staffing garages parks unique cloned trucks and hires unique drivers", () => {
   const doc = loadSii(SANDBOX).doc;
   const before = new SiiIndex(doc);
   const economy = before.one("economy");
@@ -95,10 +91,10 @@ test("staffing garages parks unique cloned trucks and hires unique drivers", (t)
 
   applyPlan(doc, { garageStatus: 3 });
   staffGarages(doc, { seed: 1, limit: 20 });
-  assert.deepEqual(validate(doc), []);
+  expect(validate(doc)).toEqual([]);
   // the game only shows drivers that are on the player's payroll
   const payroll = getArray(new SiiIndex(doc).follow(new SiiIndex(doc).one("economy"), "player"), "drivers");
-  assert.equal(payroll.length, 21, "player + 20 hired drivers");
+  expect(payroll.length).toBe( 21);
 
   const idx = new SiiIndex(doc);
   const eco = idx.one("economy");
@@ -114,27 +110,27 @@ test("staffing garages parks unique cloned trucks and hires unique drivers", (t)
       if (drivers[i] !== "null") hired.push(drivers[i]);
     });
   }
-  assert.equal(new Set(parked).size, parked.length, "a truck may only sit in one slot");
-  assert.equal(new Set(hired).size, hired.length, "a driver may only work in one slot");
-  assert.equal(getArray(pl, "trucks").length, trucksBefore + 20);
-  assert.equal(getArray(pl, "truck_profit_logs").length, trucksBefore + 20);
-  assert.equal(getArray(eco, "driver_pool").length, poolBefore - 20);
+  expect(new Set(parked).size).toBe( parked.length);
+  expect(new Set(hired).size).toBe( hired.length);
+  expect(getArray(pl, "trucks").length).toBe(trucksBefore + 20);
+  expect(getArray(pl, "truck_profit_logs").length).toBe(trucksBefore + 20);
+  expect(getArray(eco, "driver_pool").length).toBe(poolBefore - 20);
 
   // every cloned truck must own its accessories, never share the dealer's
   const newTrucks = getArray(pl, "trucks").slice(trucksBefore);
-  assert.equal(newTrucks.length, 20);
+  expect(newTrucks.length).toBe(20);
   const seenAccessories = new Set<string>();
   for (const id of newTrucks) {
     const truck = idx.byIdOrNull(id);
-    assert.ok(truck, `cloned truck ${id} exists`);
+    expect(truck, `cloned truck ${id} exists`).toBeTruthy();
     const accessories = getArray(truck, "accessories");
-    assert.ok(accessories.length > 10, "a truck clone keeps its full accessory list");
-    assert.equal(get(truck, "engine_wear"), "0");
-    assert.equal(get(truck, "fuel_relative"), "1");
+    expect(accessories.length > 10, "a truck clone keeps its full accessory list").toBeTruthy();
+    expect(get(truck, "engine_wear")).toBe("0");
+    expect(get(truck, "fuel_relative")).toBe("1");
     for (const acc of accessories) {
-      assert.ok(idx.byIdOrNull(acc), `accessory ${acc} was cloned`);
-      assert.ok(!templateAccessories.has(acc), "clones never reuse dealer accessories");
-      assert.ok(!seenAccessories.has(acc), "clones never share accessories with each other");
+      expect(idx.byIdOrNull(acc), `accessory ${acc} was cloned`).toBeTruthy();
+      expect(!templateAccessories.has(acc), "clones never reuse dealer accessories").toBeTruthy();
+      expect(!seenAccessories.has(acc), "clones never share accessories with each other").toBeTruthy();
       seenAccessories.add(acc);
     }
   }
@@ -143,9 +139,9 @@ test("staffing garages parks unique cloned trucks and hires unique drivers", (t)
   // driver record shares the HQ slot but has no assigned_truck field
   for (const driverId of hired) {
     const driver = idx.byIdOrNull(driverId);
-    assert.ok(driver);
+    expect(driver).toBeTruthy();
     if (driver.cls !== "driver_ai") continue;
-    assert.ok(parked.includes(get(driver, "assigned_truck")));
-    assert.equal(get(driver, "long_dist"), "6");
+    expect(parked.includes(get(driver, "assigned_truck"))).toBeTruthy();
+    expect(get(driver, "long_dist")).toBe("6");
   }
 });
