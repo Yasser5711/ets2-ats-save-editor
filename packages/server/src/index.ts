@@ -13,6 +13,7 @@ import {
   restoreBackup,
   saveDetail,
   searchUnits,
+  validateRoot,
   type Ops,
 } from "./api.ts";
 
@@ -54,6 +55,8 @@ function send(res: ServerResponse, status: number, payload: unknown): void {
 async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const path = url.searchParams.get("path") ?? "";
   switch (`${req.method} ${url.pathname}`) {
+    case "GET /api/validate-root":
+      return send(res, 200, validateRoot(path));
     case "GET /api/env":
       return send(res, 200, await environment());
     case "GET /api/profiles":

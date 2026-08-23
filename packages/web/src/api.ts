@@ -1,3 +1,5 @@
+import { api as apiUrl } from "./lib/platform.ts";
+
 export interface GameRoot {
   id: string;
   name: string;
@@ -112,7 +114,7 @@ export interface UnitHit {
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
+  const res = await fetch(apiUrl(url), init);
   const data: unknown = await res.json();
   if (!res.ok) {
     const message =
@@ -124,7 +126,16 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+export interface RootCheck {
+  ok: boolean;
+  path: string;
+  game: string | null;
+  profiles: number;
+}
+
 export const api = {
+  validateRoot: (path: string) =>
+    json<RootCheck>(`/api/validate-root?path=${encodeURIComponent(path)}`),
   env: () => json<{ roots: GameRoot[]; games: { id: string; name: string }[] }>("/api/env"),
   profiles: (root: string) => json<Profile[]>(`/api/profiles?root=${encodeURIComponent(root)}`),
   save: (path: string) => json<SaveDetail>(`/api/save?path=${encodeURIComponent(path)}`),

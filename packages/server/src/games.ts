@@ -67,6 +67,21 @@ export function detectRoots(): GameRoot[] {
   }
   return found;
 }
+
+export interface RootCheck {
+  ok: boolean;
+  path: string;
+  game: string | null;
+  profiles: number;
+}
+
+export function validateRoot(path: string): RootCheck {
+  const folders = ["profiles", "steam_profiles"].filter((f) => existsSync(join(path, f)));
+  const profiles = folders.reduce((total, folder) => total + readdirSync(join(path, folder)).length, 0);
+  const name = path.split(/[\\/]/).filter(Boolean).at(-1) ?? "";
+  const game = GAMES.find((g) => g.docsFolder.toLowerCase() === name.toLowerCase());
+  return { ok: folders.length > 0, path, game: game?.name ?? null, profiles };
+}
 export async function isRunning(gameId: string): Promise<boolean> {
   const game = GAMES.find((g) => g.id === gameId);
   if (!game || process.platform !== "win32") return false;

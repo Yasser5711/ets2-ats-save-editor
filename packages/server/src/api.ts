@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmdirSync, statSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { detectRoots, isRunning, listProfiles, readGameLog, GAMES } from "./games.ts";
+import { detectRoots, isRunning, listProfiles, readGameLog, validateRoot, GAMES } from "./games.ts";
 import { allCities, applyPlan, discoverySummary, type EditPlan, GARAGE_CAPACITY, get, getArray, loadSii, mergeDiscovery, saveSiiAsText, set, type SiiDocument, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, type Unit, validate, visitAllCities } from "@truck/core";
 
 export interface FieldEdit {
@@ -255,4 +255,4 @@ export async function environment() {
   return { roots, games: GAMES.map((g) => ({ id: g.id, name: g.name })) };
 }
 
-export { listProfiles, readGameLog };
+export { listProfiles, readGameLog, validateRoot };
