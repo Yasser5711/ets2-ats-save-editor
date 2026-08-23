@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { sandboxSave } from "./sandbox.ts";
 import { SiiIndex, get, getArray, parseSii, stringifySii } from "../src/model.ts";
 import { loadSii } from "../src/save.ts";
 import { applyPlan, validate } from "../src/edits.ts";
@@ -8,13 +7,8 @@ import { staffGarages } from "../src/fleet.ts";
 import { visitAllCities, mergeDiscovery, allCities } from "../src/discovery.ts";
 import { IdAllocator, namelessId, namelessValue } from "../src/ids.ts";
 
-const SANDBOX = fileURLToPath(
-  new URL(
-    "../../../sandbox/Euro Truck Simulator 2/profiles/556C5F746F75746F75636865/save/1/game.sii",
-    import.meta.url,
-  ),
-);
-const hasSandbox = existsSync(SANDBOX);
+const SANDBOX = sandboxSave() ?? "";
+const hasSandbox = SANDBOX !== "";
 
 test("nameless ids round-trip through their 64-bit value", () => {
   expect(namelessValue("_nameless.2b6.8e3e.d7f8")).toBe(0x02b68e3ed7f8n);

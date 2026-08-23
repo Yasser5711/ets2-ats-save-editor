@@ -1,18 +1,19 @@
 import { expect, test } from "vitest";
 import { existsSync, rmSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import { sandboxRoot, sandboxSave } from "./sandbox.ts";
+import { dirname, join } from "node:path";
 import { applyOps, backupsOf, cloneSlot, planOps, restoreBackup, saveDetail, searchUnits } from "../src/api.ts";
 import { listProfiles, readGameLog } from "../src/games.ts";
 
-const ROOT = fileURLToPath(new URL("../../../sandbox/Euro Truck Simulator 2", import.meta.url));
-const SLOT = join(ROOT, "profiles/556C5F746F75746F75636865/save/1");
-const hasSandbox = existsSync(join(SLOT, "game.sii"));
+const ROOT = sandboxRoot() ?? "";
+const SAVE = sandboxSave() ?? "";
+const SLOT = SAVE === "" ? "" : dirname(SAVE);
+const hasSandbox = ROOT !== "" && SLOT !== "" && existsSync(join(SLOT, "game.sii"));
 
 test.skipIf(!hasSandbox)("profile listing decodes hex folder names and reads slot titles", () => {
   const profiles = listProfiles(ROOT);
-  const profile = profiles.find((p) => p.name === "Ul_toutouche");
-  expect(profile, "profile name is hex-decoded").toBeTruthy();
+  const profile = profiles.find((p) => !/^[0-9A-Fa-f]+$/.test(p.name));
+  expect(profile, "hex folder names are decoded into readable profile names").toBeTruthy();
   expect(profile.slots.length > 5).toBeTruthy();
   expect(profile.slots.every((s) => s.bytes > 0 && s.modified.length > 0)).toBeTruthy();
 });

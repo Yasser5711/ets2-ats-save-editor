@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { sandboxSave } from "./sandbox.ts";
 import { decodeBsii, formatFloat, decodeToken } from "../src/bsii.ts";
 import { parseSii, stringifySii, get, getArray, SiiIndex } from "../src/model.ts";
 import { decryptScsC, encryptScsC, detectKind } from "../src/crypto.ts";
@@ -42,13 +42,8 @@ const REFERENCE_TEXT = [
   "",
 ].join("\r\n");
 
-const SANDBOX = fileURLToPath(
-  new URL(
-    "../../../sandbox/Euro Truck Simulator 2/profiles/556C5F746F75746F75636865/save/1/game.sii",
-    import.meta.url,
-  ),
-);
-const hasSandbox = existsSync(SANDBOX);
+const SANDBOX = sandboxSave() ?? "";
+const hasSandbox = SANDBOX !== "";
 
 test("decodes the documented reference BSII file exactly", () => {
   const buf = Buffer.from(REFERENCE_HEX.replace(/\s+/g, ""), "hex");
