@@ -5,3 +5,8 @@ release/
 tmp/
 sandbox/
 *.bak
+packages/desktop/src-tauri/target/
+packages/desktop/src-tauri/binaries/
+packages/desktop/src-tauri/gen/
+packages/desktop/src-tauri/icons/android/
+packages/desktop/src-tauri/icons/ios/

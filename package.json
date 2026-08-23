@@ -14,7 +14,10 @@
     "app": "turbo run build && node packages/server/dist/index.js",
     "dev:web": "pnpm --filter @truck/web dev",
     "lint": "oxlint",
-    "lint:fix": "oxlint --fix"
+    "lint:fix": "oxlint --fix",
+    "desktop": "pnpm --filter @truck/desktop dev",
+    "desktop:build": "turbo run build --filter=@truck/web --filter=@truck/server && pnpm --filter @truck/desktop bundle",
+    "icon": "node packages/desktop/scripts/make-icon.mjs && pnpm --filter @truck/desktop exec tauri icon packages/desktop/icon-source.png -o src-tauri/icons"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

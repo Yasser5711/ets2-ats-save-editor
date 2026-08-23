@@ -14,7 +14,7 @@
   },
   "rules": {
     "no-console": "off",
-    "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "no-underscore-dangle": ["error", { "allow": ["__TAURI__", "__TAURI_INTERNALS__", "__WEB_ASSETS"] }],
     "typescript/no-explicit-any": "error",
     "typescript/consistent-type-imports": "error",
     "unicorn/prefer-node-protocol": "error",

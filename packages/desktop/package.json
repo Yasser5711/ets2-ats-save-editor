@@ -1,0 +1,19 @@
+{
+  "name": "@truck/desktop",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "tauri": "tauri",
+    "bundle": "node scripts/build-sidecar.mjs && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.6"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-dialog": "^2.5.0",
+    "@tauri-apps/plugin-shell": "^2.3.1"
+  }
+}

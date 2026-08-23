@@ -3,20 +3,41 @@
   "ui": "stream",
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "src-tauri/target/release/bundle/**"
+      ]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["src/**", "test/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "src/**",
+        "test/**"
+      ]
     },
     "package": {
-      "dependsOn": ["build", "^build"],
-      "outputs": ["../../release/**"],
+      "dependsOn": [
+        "build",
+        "^build"
+      ],
+      "outputs": [
+        "../../release/**"
+      ],
       "cache": false
+    },
+    "desktop": {
+      "cache": false,
+      "persistent": true
     }
   }
 }
