@@ -1,8 +1,12 @@
 import { useState } from "react";
-import type { Ops, SaveDetail } from "../api.ts";
-import { Button, Panel } from "../ui.tsx";
+import type { Ops, SaveDetail } from "@/api.ts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const SIZES: { status: number; label: string; slots: number }[] = [
+const SIZES = [
   { status: 0, label: "not owned", slots: 0 },
   { status: 6, label: "tiny", slots: 1 },
   { status: 2, label: "small", slots: 3 },
@@ -17,75 +21,82 @@ interface Props {
 
 export function GaragesTab({ detail, ops, setOps }: Props) {
   const [filter, setFilter] = useState("");
-  const rows = detail.garages.filter((g) => g.city.includes(filter.toLowerCase()));
+  const rows = detail.garages.filter((garage) => garage.city.includes(filter.toLowerCase()));
   const chosen = ops.edits?.garageStatus;
 
   return (
-    <div className="space-y-5">
-      <Panel
-        title="buy or upgrade every garage"
-        right={
-          <input
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Buy or upgrade every garage</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {SIZES.map((size) => (
+              <Button
+                key={size.status}
+                variant={chosen === size.status ? "default" : "outline"}
+                size="sm"
+                onClick={() =>
+                  setOps({
+                    ...ops,
+                    edits: {
+                      ...ops.edits,
+                      garageStatus: chosen === size.status ? undefined : size.status,
+                    },
+                  })
+                }
+              >
+                {size.label} · {size.slots} slots
+              </Button>
+            ))}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Slot arrays are resized with the status. Garages holding more trucks than the new size allows are
+            skipped instead of losing vehicles.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="text-sm">Garages · {rows.length}</CardTitle>
+          <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="filter city"
-            className="rounded-md border border-[var(--color-edge)] bg-black/30 px-2 py-1 text-xs"
+            className="h-8 w-44"
           />
-        }
-      >
-        <div className="flex flex-wrap gap-2">
-          {SIZES.map((size) => (
-            <Button
-              key={size.status}
-              tone={chosen === size.status ? "primary" : "default"}
-              onClick={() =>
-                setOps({
-                  ...ops,
-                  edits: {
-                    ...ops.edits,
-                    garageStatus: chosen === size.status ? undefined : size.status,
-                  },
-                })
-              }
-            >
-              {size.label} · {size.slots} slots
-            </Button>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Slot arrays are resized with the status. Garages holding more trucks than the new size allows are
-          skipped instead of losing vehicles.
-        </p>
-      </Panel>
-
-      <Panel title={`garages (${rows.length})`}>
-        <div className="max-h-[26rem] overflow-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-[var(--color-panel)] text-slate-500">
-              <tr>
-                <th className="px-2 py-1.5">city</th>
-                <th className="px-2 py-1.5">status</th>
-                <th className="px-2 py-1.5">slots</th>
-                <th className="px-2 py-1.5">trucks</th>
-                <th className="px-2 py-1.5">drivers</th>
-              </tr>
-            </thead>
-            <tbody className="font-mono">
-              {rows.map((g) => (
-                <tr key={g.id} className="border-t border-[var(--color-edge)]/60">
-                  <td className="px-2 py-1 text-slate-200">{g.city}</td>
-                  <td className="px-2 py-1">
-                    {SIZES.find((s) => s.status === Number(g.status))?.label ?? g.status}
-                  </td>
-                  <td className="px-2 py-1 text-slate-500">{g.capacity}</td>
-                  <td className="px-2 py-1">{g.trucks}</td>
-                  <td className="px-2 py-1">{g.drivers}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Panel>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-96">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>city</TableHead>
+                  <TableHead>status</TableHead>
+                  <TableHead className="text-right">slots</TableHead>
+                  <TableHead className="text-right">trucks</TableHead>
+                  <TableHead className="text-right">drivers</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="font-mono">
+                {rows.map((garage) => (
+                  <TableRow key={garage.id}>
+                    <TableCell>{garage.city}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {SIZES.find((size) => size.status === Number(garage.status))?.label ?? garage.status}
+                    </TableCell>
+                    <TableCell className="tabular text-right">{garage.capacity}</TableCell>
+                    <TableCell className="tabular text-right">{garage.trucks}</TableCell>
+                    <TableCell className="tabular text-right">{garage.drivers}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
+        </CardContent>
+      </Card>
     </div>
   );
 }

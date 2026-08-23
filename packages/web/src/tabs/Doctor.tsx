@@ -1,60 +1,84 @@
 import { useEffect, useState } from "react";
-import { api, type GameRoot, type LogIssue } from "../api.ts";
-import { Button, Panel } from "../ui.tsx";
+import { toast } from "sonner";
+import { History, RefreshCw, Stethoscope } from "lucide-react";
+import { api, type GameRoot, type LogIssue } from "@/api.ts";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+interface Backup {
+  file: string;
+  modified: string;
+  bytes: number;
+}
 
 export function DoctorTab({ root, path }: { root: GameRoot | null; path: string }) {
   const [issues, setIssues] = useState<LogIssue[]>([]);
-  const [backups, setBackups] = useState<{ file: string; modified: string; bytes: number }[]>([]);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [backups, setBackups] = useState<Backup[]>([]);
 
   const refresh = () => {
     const load = async () => {
       if (root) setIssues(await api.log(root.path));
       setBackups(await api.backups(path));
     };
-    load().catch((e: Error) => setNotice(e.message));
+    load().catch((e: Error) => toast.error(e.message));
   };
 
   useEffect(refresh, [root, path]);
 
+  const restore = (file: string) => {
+    const run = async () => {
+      await api.restore(path, file);
+      toast.success(`restored ${file}`);
+    };
+    run().catch((e: Error) => toast.error(e.message));
+  };
+
   return (
-    <div className="space-y-5">
-      <Panel title="backups of this slot" right={<Button tone="ghost" onClick={refresh}>refresh</Button>}>
-        {backups.length === 0 && <div className="text-sm text-slate-500">No backups yet.</div>}
-        <div className="space-y-1">
-          {backups.map((b) => (
-            <div key={b.file} className="flex items-center gap-3 font-mono text-xs">
-              <span className="text-slate-300">{b.file}</span>
-              <span className="text-slate-500">{(b.bytes / 1048576).toFixed(1)} MB</span>
-              <Button
-                tone="danger"
-                onClick={() => {
-                  const restore = async () => {
-                    await api.restore(path, b.file);
-                    setNotice(`restored ${b.file}`);
-                  };
-                  restore().catch((e: Error) => setNotice(e.message));
-                }}
-              >
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <History className="size-4" /> Backups of this slot
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={refresh}>
+            <RefreshCw className="size-3.5" /> refresh
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {backups.length === 0 && <p className="text-muted-foreground text-sm">No backups yet.</p>}
+          {backups.map((backup) => (
+            <div key={backup.file} className="flex items-center gap-3 font-mono text-xs">
+              <span className="truncate">{backup.file}</span>
+              <span className="text-muted-foreground tabular">{(backup.bytes / 1048576).toFixed(1)} MB</span>
+              <Button variant="destructive" size="sm" onClick={() => restore(backup.file)}>
                 restore
               </Button>
             </div>
           ))}
-        </div>
-        {notice && <div className="mt-2 text-xs text-emerald-300">{notice}</div>}
-      </Panel>
+        </CardContent>
+      </Card>
 
-      <Panel title="game log errors">
-        {issues.length === 0 && <div className="text-sm text-slate-500">Nothing logged.</div>}
-        <div className="max-h-80 space-y-1 overflow-auto">
-          {issues.map((issue, i) => (
-            <div key={`${issue.time}-${i}`} className="rounded border border-[var(--color-edge)]/60 p-2">
-              <div className="font-mono text-[11px] text-red-300">{issue.text}</div>
-              {issue.hint && <div className="mt-1 text-xs text-amber-300">{issue.hint}</div>}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Stethoscope className="size-4" /> Game log errors
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {issues.length === 0 && <p className="text-muted-foreground text-sm">Nothing logged.</p>}
+          <ScrollArea className="max-h-80">
+            <div className="space-y-1.5">
+              {issues.map((issue) => (
+                <div key={`${issue.time}-${issue.text}`} className="rounded-md border p-2">
+                  <p className="text-destructive font-mono text-[11px]">{issue.text}</p>
+                  {issue.hint && <p className="text-primary mt-1 text-xs">{issue.hint}</p>}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </Panel>
+          </ScrollArea>
+        </CardContent>
+      </Card>
     </div>
   );
 }
