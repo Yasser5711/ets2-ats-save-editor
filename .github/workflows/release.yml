@@ -27,7 +27,7 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  publish-executable:
+  publish-executables:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: windows-latest
@@ -47,12 +47,27 @@ jobs:
         with:
           bun-version: latest
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm package
+      - name: build the portable server executable
+        run: pnpm package
 
-      - name: attach the executable to the release
+      - name: build the desktop installer
+        run: pnpm desktop:build
+
+      - name: attach both executables to the release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" release/truck-save-editor.exe --clobber
+        run: |
+          $tag = "${{ needs.release-please.outputs.tag_name }}"
+          $installer = Get-ChildItem "packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          Copy-Item $installer "truck-save-editor-$tag-desktop-setup.exe"
+          Copy-Item release/truck-save-editor.exe "truck-save-editor-$tag-portable.exe"
+          gh release upload $tag "truck-save-editor-$tag-desktop-setup.exe" "truck-save-editor-$tag-portable.exe" --clobber

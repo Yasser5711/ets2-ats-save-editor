@@ -80,3 +80,35 @@ jobs:
         with:
           name: truck-save-editor-windows
           path: release/truck-save-editor.exe
+
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: bundle the desktop app
+        run: pnpm desktop:build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: truck-save-editor-desktop
+          path: packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
