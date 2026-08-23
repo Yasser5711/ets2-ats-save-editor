@@ -1,9 +1,4 @@
-interface TauriBridge {
-  pickFolder: (title: string) => Promise<string | null>;
-  apiPort: () => Promise<number>;
-  readSettings: () => Promise<Settings>;
-  writeSettings: (settings: Settings) => Promise<void>;
-}
+import type { DesktopBridge } from "./desktop.ts";
 
 export interface Settings {
   root: string | null;
@@ -12,9 +7,8 @@ export interface Settings {
 
 const STORAGE_KEY = "truck-save-editor.settings";
 
-function bridge(): TauriBridge | null {
-  const candidate = (globalThis as { truckDesktop?: TauriBridge }).truckDesktop;
-  return candidate ?? null;
+function bridge(): DesktopBridge | null {
+  return (globalThis as { truckDesktop?: DesktopBridge }).truckDesktop ?? null;
 }
 
 export const isDesktop = () => bridge() !== null;
@@ -24,8 +18,7 @@ let apiBase = "";
 export async function initPlatform(): Promise<void> {
   const desktop = bridge();
   if (!desktop) return;
-  const port = await desktop.apiPort();
-  apiBase = `http://127.0.0.1:${port}`;
+  apiBase = `http://127.0.0.1:${await desktop.apiPort()}`;
 }
 
 export const api = (path: string) => `${apiBase}${path}`;

@@ -1,29 +1,34 @@
 import type { Settings } from "./platform.ts";
 
-interface TauriGlobal {
-  core: { invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T> };
-  dialog?: { open: (options: Record<string, unknown>) => Promise<string | string[] | null> };
+export interface DesktopBridge {
+  apiPort: () => Promise<number>;
+  readSettings: () => Promise<Settings>;
+  writeSettings: (settings: Settings) => Promise<void>;
+  pickFolder: (title: string) => Promise<string | null>;
 }
 
-function tauri(): TauriGlobal | null {
-  const global = globalThis as { __TAURI__?: TauriGlobal; __TAURI_INTERNALS__?: unknown };
-  if (!global.__TAURI_INTERNALS__) return null;
-  return global.__TAURI__ ?? null;
-}
+export const runningInTauri = () =>
+  Boolean((globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
 
-export function installDesktopBridge(): void {
-  const runtime = tauri();
-  if (!runtime) return;
-  const invoke = runtime.core.invoke;
-  Object.assign(globalThis, {
-    truckDesktop: {
-      apiPort: () => invoke<number>("api_port"),
-      readSettings: () => invoke<Settings>("read_settings"),
-      writeSettings: (settings: Settings) => invoke<void>("write_settings", { settings }),
-      pickFolder: async (title: string) => {
-        const picked = await runtime.dialog?.open({ directory: true, multiple: false, title });
-        return typeof picked === "string" ? picked : null;
-      },
+/**
+ * Plugin APIs are not exposed on the global `__TAURI__` object, so the real
+ * packages are imported instead - only inside Tauri, to keep the browser bundle
+ * free of IPC code.
+ */
+export async function installDesktopBridge(): Promise<void> {
+  if (!runningInTauri()) return;
+  const [{ invoke }, { open }] = await Promise.all([
+    import("@tauri-apps/api/core"),
+    import("@tauri-apps/plugin-dialog"),
+  ]);
+  const bridge: DesktopBridge = {
+    apiPort: () => invoke<number>("api_port"),
+    readSettings: () => invoke<Settings>("read_settings"),
+    writeSettings: (settings) => invoke("write_settings", { settings }),
+    pickFolder: async (title) => {
+      const picked = await open({ directory: true, multiple: false, title });
+      return typeof picked === "string" ? picked : null;
     },
-  });
+  };
+  Object.assign(globalThis, { truckDesktop: bridge });
 }

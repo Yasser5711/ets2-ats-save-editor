@@ -43,9 +43,22 @@ async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+/**
+ * The desktop webview loads the UI from the Tauri asset protocol, so calls to
+ * this server are cross-origin. It only ever listens on 127.0.0.1, so echoing
+ * the caller's origin back is enough.
+ */
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  "access-control-max-age": "86400",
+};
+
 function send(res: ServerResponse, status: number, payload: unknown): void {
   const text = typeof payload === "string" ? payload : JSON.stringify(payload);
   res.writeHead(status, {
+    ...CORS,
     "content-type": typeof payload === "string" ? "text/plain; charset=utf-8" : MIME[".json"],
     "cache-control": "no-store",
   });
@@ -112,6 +125,15 @@ export function startServer(port: number): Promise<number> {
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (url.pathname.startsWith("/api/")) {
+      if (req.method === "OPTIONS") {
+        res.writeHead(204, CORS);
+        res.end();
+        return;
+      }
+      const started = Date.now();
+      res.on("finish", () => {
+        console.log(`${req.method} ${url.pathname} -> ${res.statusCode} in ${Date.now() - started}ms`);
+      });
       handleApi(req, res, url).catch((err: Error) => send(res, 400, { error: err.message }));
       return;
     }
