@@ -39,8 +39,17 @@ Saves are written as plain `SiiNunit` text, which both games load regardless of 
 
 ## Install and run
 
+Desktop app (native window, native folder picker):
+
 ```bash
 pnpm install
+pnpm desktop        # dev: Tauri window + Vite HMR
+pnpm desktop:build  # installer in packages/desktop/src-tauri/target/release/bundle/nsis
+```
+
+Browser mode, same features without Tauri:
+
+```bash
 pnpm build          # turbo: core -> cli -> server -> web
 pnpm app            # http://127.0.0.1:7311
 ```
@@ -55,9 +64,14 @@ pnpm dev:web        # Vite with HMR against a running server
 pnpm package        # release/truck-save-editor.exe (UI embedded, single file)
 ```
 
-The packaged build is a single self-contained executable - the interface is embedded in the
-binary, so there is nothing to unzip and no Node install needed. Run it, open the printed URL.
-Every [release](../../releases) has the executable attached.
+Every [release](../../releases) ships two Windows executables: the **desktop installer**
+(~27 MB, native window) and the **portable** build (~95 MB, serves the UI on localhost). Neither
+needs Node installed.
+
+On first start the app asks for the game folder - the one holding `profiles` and
+`steam_profiles`. Detected locations are offered as one-click cards, or pick any folder with the
+native browser; the choice is remembered in the app config directory and can be changed from the
+header at any time.
 
 ## CLI
 
@@ -76,8 +90,13 @@ node packages/cli/dist/cli.js decode "<file>" out.txt
 packages/core     ScsC crypto, BSII v1-3 decoder, SiiNunit model, edit operations, validator
 packages/cli      command line front end
 packages/server   local HTTP API, profile discovery, backups, log triage, exe packaging
-packages/web      React + Tailwind interface
+packages/web      React + Tailwind + shadcn/ui interface
+packages/desktop  Tauri v2 shell: native window, folder picker, sidecar lifecycle
 ```
+
+The desktop app is a Tauri shell (4.7 MB) that spawns the compiled server as a sidecar on a
+random free port and loads the same interface in a native webview. The editing core stays in
+TypeScript, so the decoder verified against real saves is the one that ships.
 
 ## Safety
 
