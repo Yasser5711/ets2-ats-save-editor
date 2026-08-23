@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0](https://github.com/Yasser5711/ets2-ats-save-editor/compare/v0.2.0...v0.3.0) (2026-08-23)
+
+
+### Features
+
+* choose the game folder on first start ([35bba24](https://github.com/Yasser5711/ets2-ats-save-editor/commit/35bba24d2209ff25cb08dff848270f20b34e08b6))
+* **desktop:** ship a tauri app around the editor core ([33a8e11](https://github.com/Yasser5711/ets2-ats-save-editor/commit/33a8e117637e23b8b0fce3ac497757b04b70bea5))
+* **web:** clearer wording on the folder picker ([34cf944](https://github.com/Yasser5711/ets2-ats-save-editor/commit/34cf944621abf2360814c5f0a2e152d3811dffc9))
+* **web:** restyle the interface with shadcn/ui ([c3ec264](https://github.com/Yasser5711/ets2-ats-save-editor/commit/c3ec264fc4d00da0132a3f5119d4b86a10c3095f))
+
+
+### Bug Fixes
+
+* **desktop:** make the api reachable from the tauri window ([c52125e](https://github.com/Yasser5711/ets2-ats-save-editor/commit/c52125eb9fcee90041786b94b7eabc41d6fdb3aa))
+
+
+### Refactors
+
+* **web:** drop the hand rolled ui primitives ([d4d1549](https://github.com/Yasser5711/ets2-ats-save-editor/commit/d4d1549c882d13ba06ba3abb4e619f215985bb8f))
+
 ## [0.2.0](https://github.com/Yasser5711/ets2-ats-save-editor/compare/v0.1.0...v0.2.0) (2026-08-23)
 
 
