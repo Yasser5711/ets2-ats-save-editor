@@ -1,6 +1,6 @@
 [package]
 name = "truck-save-editor"
-version = "0.2.0" # x-release-please-version
+version = "0.3.0" # x-release-please-version
 description = "Save editor for Euro Truck Simulator 2 and American Truck Simulator"
 authors = ["Yasser Mekhfi"]
 edition = "2021"
