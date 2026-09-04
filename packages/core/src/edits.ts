@@ -184,13 +184,15 @@ export function validate(doc: SiiDocument): string[] {
     }
     drivers.forEach((driver, i) => {
       if (driver === "null") return;
+      const unit = idx.byIdOrNull(driver);
+      // the player's own record sits in a garage slot even before the first truck is bought
+      if (!unit || unit.cls !== "driver_ai") return;
       const truck = vehicles[i];
       if (truck === undefined || truck === "null") {
-        problems.push(`${g.id}: driver ${driver} in slot ${i} has no truck in that slot`);
+        problems.push(`${g.id}: hired driver ${driver} in slot ${i} has no truck in that slot`);
         return;
       }
-      const unit = idx.byIdOrNull(driver);
-      if (unit && unit.cls === "driver_ai" && get(unit, "assigned_truck") !== truck) {
+      if (get(unit, "assigned_truck") !== truck) {
         problems.push(`${driver}: assigned_truck does not match the truck in ${g.id} slot ${i}`);
       }
     });

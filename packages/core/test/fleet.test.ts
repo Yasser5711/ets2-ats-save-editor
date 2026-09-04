@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { sandboxSave } from "./sandbox.ts";
-import { SiiIndex, get, getArray, parseSii, stringifySii } from "../src/model.ts";
+import { SiiIndex, get, getArray, parseSii, setArray, stringifySii } from "../src/model.ts";
 import { loadSii } from "../src/save.ts";
 import { applyPlan, validate } from "../src/edits.ts";
 import { staffGarages } from "../src/fleet.ts";
@@ -138,4 +138,22 @@ test.skipIf(!hasSandbox)("staffing garages parks unique cloned trucks and hires 
     expect(parked.includes(get(driver, "assigned_truck"))).toBeTruthy();
     expect(get(driver, "long_dist")).toBe("6");
   }
+});
+
+test.skipIf(!hasSandbox)("a garage slot may hold the player without a truck, a hired driver may not", () => {
+  const doc = loadSii(SANDBOX).doc;
+  const idx = new SiiIndex(doc);
+  const garage = idx.all("garage").find((g) => getArray(g, "drivers").some((d) => d !== "null"));
+  expect(garage, "the sandbox save has a garage with someone in it").toBeTruthy();
+
+  // the game itself parks the player's own record in a slot before any truck is
+  // bought - every fresh American Truck Simulator save looks like that
+  setArray(garage, "vehicles", getArray(garage, "vehicles").map(() => "null"));
+  expect(validate(doc)).toEqual([]);
+
+  const hired = idx.all("driver_ai")[0];
+  const drivers = getArray(garage, "drivers");
+  drivers[0] = hired.id;
+  setArray(garage, "drivers", drivers);
+  expect(validate(doc).some((problem) => problem.includes("has no truck in that slot"))).toBeTruthy();
 });
