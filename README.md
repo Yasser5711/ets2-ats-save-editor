@@ -68,10 +68,17 @@ Every [release](../../releases) ships two Windows executables: the **desktop ins
 (~27 MB, native window) and the **portable** build (~95 MB, serves the UI on localhost). Neither
 needs Node installed.
 
-On first start the app asks for the game folder - the one holding `profiles` and
-`steam_profiles`. Detected locations are offered as one-click cards, or pick any folder with the
-native browser; the choice is remembered in the app config directory and can be changed from the
-header at any time.
+On first start the app asks where your saves are. It scans both places the games use:
+
+- **Documents** - `Documents\Euro Truck Simulator 2`, `Documents\American Truck Simulator`,
+  including the OneDrive copies of Documents.
+- **Steam Cloud** - `Steam\userdata\<account>\227300\remote` (ETS2) and `...\270880\remote`
+  (ATS), found through the Steam path in the registry. American Truck Simulator normally keeps its
+  saves here, and only settings in Documents.
+
+Each candidate shows its source, profile count and save count, so a folder with no saves is
+greyed out instead of opening empty. Any other folder can be picked by hand; the choice is
+remembered in the app config directory and can be changed from the header.
 
 ## CLI
 
