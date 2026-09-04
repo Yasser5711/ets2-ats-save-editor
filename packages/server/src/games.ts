@@ -1,7 +1,7 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { find, loadSii } from "@truck/core";
 
 export interface GameDef {
@@ -9,6 +9,7 @@ export interface GameDef {
   name: string;
   docsFolder: string;
   process: string;
+  steamAppId: string;
 }
 
 export const GAMES: GameDef[] = [
@@ -17,12 +18,14 @@ export const GAMES: GameDef[] = [
     name: "Euro Truck Simulator 2",
     docsFolder: "Euro Truck Simulator 2",
     process: "eurotrucks2.exe",
+    steamAppId: "227300",
   },
   {
     id: "ats",
     name: "American Truck Simulator",
     docsFolder: "American Truck Simulator",
     process: "amtrucks.exe",
+    steamAppId: "270880",
   },
 ];
 
@@ -31,6 +34,10 @@ export interface GameRoot {
   name: string;
   path: string;
   running: boolean;
+  /** where the folder came from, so the picker can explain it */
+  source: "documents" | "steam cloud";
+  profiles: number;
+  saves: number;
 }
 
 export interface SaveSlot {
@@ -55,17 +62,79 @@ function docsCandidates(): string[] {
   return [join(home, "Documents"), join(home, "OneDrive", "Documents"), join(home, "OneDrive", "Documenti")];
 }
 
-export function detectRoots(): GameRoot[] {
+function steamPaths(): string[] {
+  const candidates = new Set<string>();
+  if (process.platform === "win32") {
+    try {
+      const query = execFileSync("reg", ["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"], {
+        encoding: "utf8",
+      });
+      const match = /SteamPath\s+REG_SZ\s+(.+)/.exec(query);
+      if (match) candidates.add(match[1].trim().replace(/\//g, "\\"));
+    } catch {
+      // steam not installed or registry unreadable
+    }
+    candidates.add("C:\\Program Files (x86)\\Steam");
+    candidates.add("C:\\Program Files\\Steam");
+  } else {
+    candidates.add(join(homedir(), ".steam", "steam"));
+    candidates.add(join(homedir(), "Library", "Application Support", "Steam"));
+  }
+  return [...candidates];
+}
+
+/** Steam Cloud keeps saves in userdata/<account>/<appid>/remote, not in Documents. */
+function steamCloudRoots(): GameRoot[] {
   const found: GameRoot[] = [];
-  for (const docs of docsCandidates()) {
-    for (const game of GAMES) {
-      const path = join(docs, game.docsFolder);
-      if (existsSync(join(path, "profiles")) || existsSync(join(path, "steam_profiles"))) {
-        found.push({ id: game.id, name: game.name, path, running: false });
+  for (const steam of steamPaths()) {
+    const userdata = join(steam, "userdata");
+    if (!existsSync(userdata)) continue;
+    for (const account of readdirSync(userdata)) {
+      for (const game of GAMES) {
+        const path = join(userdata, account, game.steamAppId, "remote");
+        if (!existsSync(join(path, "profiles"))) continue;
+        found.push({ ...countRoot(path), id: game.id, name: game.name, source: "steam cloud" });
       }
     }
   }
   return found;
+}
+
+function countRoot(path: string): GameRoot {
+  let profiles = 0;
+  let saves = 0;
+  for (const folder of ["profiles", "steam_profiles"]) {
+    const dir = join(path, folder);
+    if (!existsSync(dir)) continue;
+    for (const profile of readdirSync(dir)) {
+      profiles++;
+      const saveDir = join(dir, profile, "save");
+      if (!existsSync(saveDir)) continue;
+      saves += readdirSync(saveDir).filter((slot) => existsSync(join(saveDir, slot, "game.sii"))).length;
+    }
+  }
+  return { id: "", name: "", path, running: false, source: "documents", profiles, saves };
+}
+
+export function detectRoots(): GameRoot[] {
+  const found: GameRoot[] = [];
+  const seen = new Set<string>();
+  const add = (root: GameRoot) => {
+    const key = resolve(root.path).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push(root);
+  };
+  for (const docs of docsCandidates()) {
+    for (const game of GAMES) {
+      const path = join(docs, game.docsFolder);
+      if (existsSync(join(path, "profiles")) || existsSync(join(path, "steam_profiles"))) {
+        add({ ...countRoot(path), id: game.id, name: game.name, source: "documents" });
+      }
+    }
+  }
+  for (const root of steamCloudRoots()) add(root);
+  return found.toSorted((a, b) => b.saves - a.saves);
 }
 
 export interface RootCheck {
@@ -73,21 +142,25 @@ export interface RootCheck {
   path: string;
   game: string | null;
   profiles: number;
+  saves: number;
 }
 
 export function validateRoot(path: string): RootCheck {
-  const folders = ["profiles", "steam_profiles"].filter((f) => existsSync(join(path, f)));
-  const profiles = folders.reduce((total, folder) => total + readdirSync(join(path, folder)).length, 0);
+  const counted = countRoot(path);
+  const lower = path.toLowerCase().replace(/\\/g, "/");
   const name = path.split(/[\\/]/).filter(Boolean).at(-1) ?? "";
-  const game = GAMES.find((g) => g.docsFolder.toLowerCase() === name.toLowerCase());
-  return { ok: folders.length > 0, path, game: game?.name ?? null, profiles };
+  const game = GAMES.find(
+    (g) => g.docsFolder.toLowerCase() === name.toLowerCase() || lower.includes(`/${g.steamAppId}/`),
+  );
+  const ok = ["profiles", "steam_profiles"].some((folder) => existsSync(join(path, folder)));
+  return { ok, path, game: game?.name ?? null, profiles: counted.profiles, saves: counted.saves };
 }
 export async function isRunning(gameId: string): Promise<boolean> {
   const game = GAMES.find((g) => g.id === gameId);
   if (!game || process.platform !== "win32") return false;
-  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const { promise, resolve: settle } = Promise.withResolvers<boolean>();
   execFile("tasklist", ["/fi", `imagename eq ${game.process}`, "/nh"], (err, stdout) => {
-    resolve(!err && stdout.toLowerCase().includes(game.process.toLowerCase()));
+    settle(!err && stdout.toLowerCase().includes(game.process.toLowerCase()));
   });
   return promise;
 }

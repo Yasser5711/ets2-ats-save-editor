@@ -5,6 +5,9 @@ export interface GameRoot {
   name: string;
   path: string;
   running: boolean;
+  source: "documents" | "steam cloud";
+  profiles: number;
+  saves: number;
 }
 
 export interface SaveSlot {
@@ -130,6 +133,7 @@ export interface RootCheck {
   ok: boolean;
   path: string;
   game: string | null;
+  saves: number;
   profiles: number;
 }
 

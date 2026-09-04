@@ -43,6 +43,9 @@ export function App() {
             name: check.game ?? "Game folder",
             path: settings.root,
             running: false,
+            source: "documents",
+            profiles: check.profiles,
+            saves: check.saves,
           });
         }
       }
@@ -72,7 +75,21 @@ export function App() {
       toast.error("That folder has no profiles inside");
       return;
     }
-    chooseRoot({ id: root?.id ?? "ets2", name: check.game ?? "Game folder", path: chosen, running: false });
+    if (check.saves === 0) {
+      toast.warning("That folder holds profiles but no saves", {
+        description: "Steam Cloud keeps them under Steam\\userdata\\<account>\\<appid>\\remote",
+      });
+      return;
+    }
+    chooseRoot({
+      id: check.game?.includes("American") ? "ats" : (root?.id ?? "ets2"),
+      name: check.game ?? "Game folder",
+      path: chosen,
+      running: false,
+      source: "documents",
+      profiles: check.profiles,
+      saves: check.saves,
+    });
   };
 
   const loadSlot = (path: string) => {

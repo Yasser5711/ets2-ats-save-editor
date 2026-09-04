@@ -29,11 +29,21 @@ export function SetupScreen({ onPick }: { onPick: (root: GameRoot) => void }) {
         setError(`No profiles in ${chosen}. Pick the folder that contains "profiles", not a save inside it.`);
         return;
       }
+      if (check.saves === 0) {
+        setError(
+          `${chosen} holds profiles but no saves. With Steam Cloud they live in ` +
+            `Steam\\userdata\\<account>\\270880\\remote for ATS, \\227300\\remote for ETS2.`,
+        );
+        return;
+      }
       onPick({
         id: check.game?.includes("American") ? "ats" : "ets2",
         name: check.game ?? "Game folder",
         path: chosen,
         running: false,
+        source: "documents",
+        profiles: check.profiles,
+        saves: check.saves,
       });
     } catch (e) {
       setError((e as Error).message);
@@ -68,14 +78,21 @@ export function SetupScreen({ onPick }: { onPick: (root: GameRoot) => void }) {
                 <button
                   key={root.path}
                   onClick={() => onPick(root)}
-                  className="hover:border-primary/60 hover:bg-accent flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors"
+                  disabled={root.saves === 0}
+                  className="hover:border-primary/60 hover:bg-accent flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-transparent"
                 >
                   <HardDrive className="text-primary size-5 shrink-0" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{root.name}</span>
                     <span className="text-muted-foreground block truncate font-mono text-xs">{root.path}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      {root.source} · {root.profiles} profile{root.profiles === 1 ? "" : "s"} ·{" "}
+                      {root.saves === 0 ? "no saves here" : `${root.saves} saves`}
+                    </span>
                   </span>
-                  <Badge variant="secondary">use this</Badge>
+                  <Badge variant={root.saves === 0 ? "outline" : "secondary"}>
+                    {root.saves === 0 ? "empty" : "use this"}
+                  </Badge>
                 </button>
               ))}
             </div>
