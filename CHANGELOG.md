@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Yasser5711/ets2-ats-save-editor/compare/v0.3.0...v0.4.0) (2026-09-05)
+
+
+### Features
+
+* find saves kept in steam cloud ([6fbe00d](https://github.com/Yasser5711/ets2-ats-save-editor/commit/6fbe00de3b47e5c504672b2d3d5eb90959c06ac2))
+
+
+### Bug Fixes
+
+* **core:** let the player sit in a garage slot without a truck ([18d18ec](https://github.com/Yasser5711/ets2-ats-save-editor/commit/18d18ec8250c1e5fb25dabfb6e989beacc336490))
+
 ## [0.3.0](https://github.com/Yasser5711/ets2-ats-save-editor/compare/v0.2.0...v0.3.0) (2026-08-23)
 
 
