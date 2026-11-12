@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/Yasser5711/ets2-ats-save-editor/compare/v0.3.0...v0.4.0) (2026-11-12)
+
+
+### Features
+
+* discover the map from the game files, dispatch idle drivers, coach career ([e60d46a](https://github.com/Yasser5711/ets2-ats-save-editor/commit/e60d46a6fd58eeba31075ffd771987ae5905b0ef))
+* find saves kept in steam cloud ([6fbe00d](https://github.com/Yasser5711/ets2-ats-save-editor/commit/6fbe00de3b47e5c504672b2d3d5eb90959c06ac2))
+* one-click interface in english and french, portable app, single windows build for ci and release ([b016ed2](https://github.com/Yasser5711/ets2-ats-save-editor/commit/b016ed234f6fc7dfb38615fc32109e8b086d3fc5))
+
+
+### Bug Fixes
+
+* **core:** let the player sit in a garage slot without a truck ([18d18ec](https://github.com/Yasser5711/ets2-ats-save-editor/commit/18d18ec8250c1e5fb25dabfb6e989beacc336490))
+
 ## [0.3.0](https://github.com/Yasser5711/ets2-ats-save-editor/compare/v0.2.0...v0.3.0) (2026-08-23)
 
 
