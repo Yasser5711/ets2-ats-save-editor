@@ -6,3 +6,5 @@ export * from "./save.ts";
 export * from "./edits.ts";
 export * from "./discovery.ts";
 export * from "./fleet.ts";
+export * from "./hashfs.ts";
+export * from "./mapdata.ts";

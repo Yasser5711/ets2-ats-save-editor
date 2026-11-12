@@ -30,8 +30,10 @@ export interface Profile {
 export interface Summary {
   money: string;
   experience: string;
+  busExperience: string | null;
   adr: string;
   skills: Record<string, string>;
+  busSkills: Record<string, string>;
   gameTime: string;
   hqCity: string;
   ownedTrucks: number;
@@ -68,6 +70,7 @@ export interface SaveDetail {
   discovery: string;
   cities: number;
   drivers: number;
+  idleDrivers: number;
   driverPool: number;
   garages: GarageRow[];
   trucks: TruckRow[];
@@ -78,14 +81,17 @@ export interface Ops {
   edits?: {
     money?: number;
     experience?: number;
+    busExperience?: number;
     maxSkills?: boolean;
     garageStatus?: number;
     repairVehicles?: boolean;
     refuelVehicles?: boolean;
   };
   visitAllCities?: boolean;
+  discoverMap?: string;
   importDiscovery?: string;
   staff?: { seed?: number; withDrivers?: boolean; limit?: number } | null;
+  dispatchDrivers?: boolean;
   fields?: { unitId: string; key: string; value: string }[];
 }
 
@@ -141,6 +147,7 @@ export const api = {
   validateRoot: (path: string) =>
     json<RootCheck>(`/api/validate-root?path=${encodeURIComponent(path)}`),
   env: () => json<{ roots: GameRoot[]; games: { id: string; name: string }[] }>("/api/env"),
+  install: (game: string) => json<{ path: string | null }>(`/api/install?game=${encodeURIComponent(game)}`),
   profiles: (root: string) => json<Profile[]>(`/api/profiles?root=${encodeURIComponent(root)}`),
   save: (path: string) => json<SaveDetail>(`/api/save?path=${encodeURIComponent(path)}`),
   units: (path: string, q: string) =>

@@ -4,7 +4,7 @@ Save editor for **Euro Truck Simulator 2** and **American Truck Simulator**. It 
 `ScsC` container, decodes the binary `BSII` payload, edits the save through game-aware
 operations, and refuses to write anything that would crash the game.
 
-![tests](https://img.shields.io/badge/vitest-21%20passing-brightgreen)
+![tests](https://img.shields.io/badge/vitest-27%20passing-brightgreen)
 ![lint](https://img.shields.io/badge/oxlint-clean-brightgreen)
 ![node](https://img.shields.io/badge/node-24-blue)
 
@@ -26,10 +26,10 @@ orphaned unit pointers and mismatched parallel arrays.
 
 | Area | What it does |
 | --- | --- |
-| Career | money, experience, all driving skills and every ADR class |
+| Career | money, experience, all driving skills and every ADR class; coach experience and the six coach skills of the Coaches DLC |
 | Garages | buy or upgrade every garage (tiny/small/large) with correct slot counts |
-| Fleet | park a mint truck in every garage and hire a driver for it, cloned from your own dealer stock so every part exists in your DLC set |
-| Map | visit every city, unlock all dealers and recruitment agencies, merge discovered roads from a donor save |
+| Fleet | park a mint truck in every garage and hire a driver for it, cloned from your own dealer stock so every part exists in your DLC set; send hired drivers that sit idle to work |
+| Map | discover every road straight from the installed game files, visit every city, unlock all dealers and recruitment agencies, put every company and bus stop on the map |
 | Vehicles | repair including permanent wear, refuel, reset odometers |
 | Units | search all ~28 000 units and edit single fields with a diff preview |
 | Doctor | timestamped backups with one-click restore, plus `game.log.txt` triage |
@@ -57,7 +57,7 @@ pnpm app            # http://127.0.0.1:7311
 Other tasks:
 
 ```bash
-pnpm test           # vitest, 21 tests across core and server
+pnpm test           # vitest, 27 tests across core and server
 pnpm typecheck      # tsc across every package
 pnpm lint           # oxlint
 pnpm dev:web        # Vite with HMR against a running server
@@ -86,15 +86,16 @@ remembered in the app config directory and can be changed from the header.
 node packages/cli/dist/cli.js profiles
 node packages/cli/dist/cli.js info  "<save slot>"
 node packages/cli/dist/cli.js check "<save slot>"
-node packages/cli/dist/cli.js edit  "<save slot>" --money 1000000000 --max-skills --garages \
-    --repair --refuel --visit-all-cities --staff-garages
+node packages/cli/dist/cli.js edit  "<save slot>" --money 1000000000 --max-skills --bus-xp 10000000 \
+    --garages --repair --refuel --visit-all-cities --staff-garages --dispatch-drivers \
+    --discover-map "<Steam>\steamapps\common\Euro Truck Simulator 2"
 node packages/cli/dist/cli.js decode "<file>" out.txt
 ```
 
 ## Layout
 
 ```
-packages/core     ScsC crypto, BSII v1-3 decoder, SiiNunit model, edit operations, validator
+packages/core     ScsC crypto, BSII v1-3 decoder, SiiNunit model, HashFS archive reader, map sector scan, edit operations, validator
 packages/cli      command line front end
 packages/server   local HTTP API, profile discovery, backups, log triage, exe packaging
 packages/web      React + Tailwind + shadcn/ui interface
@@ -112,18 +113,30 @@ TypeScript, so the decoder verified against real saves is the one that ships.
 - Nothing is written while the validator reports a problem.
 - The header warns when the game is running, because it overwrites saves on exit.
 
-Tested against a real 1.61 profile: 45 profile and save files decode and round-trip byte for byte,
-and the decoder matches the reference file published with `SII_Decrypt`.
+Tested against real 1.61 and 1.62 profiles: 45 profile and save files decode and round-trip byte for
+byte, and the decoder matches the reference file published with `SII_Decrypt`.
 
 ## Format notes
 
 - `ScsC`: AES-256-CBC (fixed key) + zlib; the HMAC field is not verified by the game.
 - `BSII` v1-3: structure blocks define fields, data blocks carry values; 34 value types.
 - Tokens are base-38 identifiers packed into 63 bits; ids print as `_nameless.a.bbbb.cccc`.
-- `economy.discovered_items` holds map-item ids that live in the game's map files, so full road
-  discovery can only be merged from another save.
+- `economy.discovered_items` holds the ids of the roads, prefabs and map areas the player has seen.
+  The ids live in the game's map sectors (`map/<name>/sec+XXXX+ZZZZ.base` inside `base_map.scs` and
+  the map DLC archives), so the editor reads them from the installed game: 181 677 items for ETS2
+  1.62 with every map DLC. A donor save from another map version covers far less - 82 000 of them in
+  our case - which is why a merged map stayed short of 100%.
+- `.scs` archives are HashFS v2: entries are keyed by the CityHash64 of their path, directories are
+  entries that list their children.
+- A hired `driver_ai` only moves when `economy_event_queue` holds an event for it (`param` 1 rest
+  begins, 2 rest ends, 4 job ends). A driver on the payroll without one never takes a job, so hiring
+  queues a `param: 4` event and writes the driver like the game writes one on an empty leg home.
+- Game 1.62 added the coach skills `long_duty`, `tight_schedule`, `satisfaction_decrease`,
+  `low_acceleration`, `satisfaction_increase` and `ecodriving` (three ranks each) next to
+  `bus_experience_points`; coach levels use the same experience table as truck levels.
 
 ## Credits
 
 Format documentation from [TheLazyTomcat/SII_Decrypt](https://github.com/TheLazyTomcat/SII_Decrypt);
-garage capacities cross-checked against [LIPtoH/TS-SE-Tool](https://github.com/LIPtoH/TS-SE-Tool).
+garage capacities cross-checked against [LIPtoH/TS-SE-Tool](https://github.com/LIPtoH/TS-SE-Tool);
+archive and map-item layout from [sk-zk/TruckLib](https://github.com/sk-zk/TruckLib).

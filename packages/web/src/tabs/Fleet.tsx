@@ -43,10 +43,18 @@ export function FleetTab({ detail, ops, setOps }: Props) {
               />
               <ToggleRow
                 label="Hire a driver for each truck"
-                hint="drivers go on the payroll and take 1-2 in-game days before their first job"
+                hint="drivers go on the payroll and take their first job within a few in-game hours"
                 checked={staff !== null && staff.withDrivers !== false}
                 onChange={(on) => patchStaff({ withDrivers: on })}
               />
+              {detail.idleDrivers > 0 && (
+                <ToggleRow
+                  label={`Send ${detail.idleDrivers} idle drivers to work`}
+                  hint="hired, with a truck, but nothing scheduled for them - they never take a job on their own"
+                  checked={Boolean(ops.dispatchDrivers)}
+                  onChange={(on) => setOps({ ...ops, dispatchDrivers: on || undefined })}
+                />
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <NumberField

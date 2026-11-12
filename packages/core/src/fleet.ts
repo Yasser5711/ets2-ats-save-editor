@@ -6,6 +6,12 @@ import { repairVehicle, trySet } from "./edits.ts";
 
 const DRIVER_SKILLS = ["long_dist", "heavy", "fragile", "urgent", "mechanical"] as const;
 const DRIVER_SKILL_MAX = 6;
+/** `driver_ai.state`: 1 resting, 2 on duty, 4 resting while on duty */
+const DRIVER_ON_DUTY = 2;
+/** `economy_event.param` for a driver: 1 rest begins, 2 rest ends, 4 job ends */
+const EVENT_JOB_END = 4;
+const FIRST_JOB_DELAY_MIN = 30;
+const FIRST_JOB_SPREAD_MIN = 180;
 
 const ACCESSORY_CLASSES = new Set([
   "vehicle_accessory",
@@ -150,7 +156,7 @@ export function staffGarages(doc: SiiDocument, options: StaffOptions = {}): stri
       if (driverId !== undefined) {
         const driver = idx.byIdOrNull(driverId);
         if (driver) {
-          set(driver, "assigned_truck", truck.id);
+          // drivers take the truck of their slot; `assigned_truck` stays null in the game's own saves
           set(driver, "adr", 1);
           for (const skill of DRIVER_SKILLS) set(driver, skill, DRIVER_SKILL_MAX);
           drivers[slot] = driverId;
@@ -188,5 +194,103 @@ export function staffGarages(doc: SiiDocument, options: StaffOptions = {}): stri
     `parked ${parked} cloned trucks (${doc.units.length} units in save)`,
     `hired ${hired.length} drivers on the payroll, ${freeDrivers.length} applicants left in the pool`,
     `models used: ${models.map(([m, n]) => `${m} x${n}`).join(", ")}`,
+    ...(hired.length > 0 ? dispatchIdleDrivers(doc) : []),
   ];
+}
+
+interface Posting {
+  driver: Unit;
+  city: string;
+  truck: string;
+}
+
+/**
+ * Hired drivers that stand in a garage slot next to a truck while the event
+ * queue holds nothing for them. The game only ever moves a driver from a queued
+ * event, so these never take a job.
+ */
+function idlePostings(idx: SiiIndex): Posting[] {
+  const scheduled = new Set<string>();
+  for (const id of getArray(idx.follow(idx.one("economy"), "event_queue"), "data")) {
+    const event = idx.byIdOrNull(id);
+    if (event) scheduled.add(get(event, "unit_link"));
+  }
+  const postings: Posting[] = [];
+  for (const garage of idx.all("garage")) {
+    const vehicles = getArray(garage, "vehicles");
+    getArray(garage, "drivers").forEach((id, slot) => {
+      const driver = idx.byIdOrNull(id);
+      const truck = vehicles[slot] ?? "null";
+      if (!driver || driver.cls !== "driver_ai" || truck === "null" || scheduled.has(id)) return;
+      postings.push({ driver, city: garage.id.replace(/^garage\./, ""), truck });
+    });
+  }
+  return postings;
+}
+
+export function countIdleDrivers(doc: SiiDocument): number {
+  return idlePostings(new SiiIndex(doc)).length;
+}
+
+/**
+ * Puts every idle hired driver back into the game's job cycle.
+ *
+ * A working driver in a real save is on duty (`state: 2`) with one `param: 4`
+ * (job ends) event queued; when it fires the game pays the job out and plans the
+ * next one. A driver without that event keeps its state forever - the "finishes
+ * in N/A" limbo the SCS forum fixes by adding the event by hand
+ * (forum.scssoft.com/viewtopic.php?t=339364).
+ *
+ * Drivers that never had a job are written like the game writes a driver on an
+ * empty leg home: no cargo, no target, leaving from a company of the home city.
+ */
+export function dispatchIdleDrivers(doc: SiiDocument): string[] {
+  const idx = new SiiIndex(doc);
+  const postings = idlePostings(idx);
+  if (postings.length === 0) return [];
+  const now = Number(get(idx.one("economy"), "game_time"));
+  const companyIn = new Map<string, string>();
+  for (const company of idx.all("company")) {
+    const city = company.id.slice(company.id.lastIndexOf(".") + 1);
+    if (!companyIn.has(city)) companyIn.set(city, company.id);
+  }
+
+  const queue = idx.follow(idx.one("economy"), "event_queue");
+  const order = getArray(queue, "data");
+  const times = order.map((id) => {
+    const event = idx.byIdOrNull(id);
+    return event ? Number(get(event, "time")) : Infinity;
+  });
+  const ids = new IdAllocator(doc);
+  postings.forEach(({ driver, city, truck }, i) => {
+    set(driver, "hometown", city);
+    if (get(driver, "current_city") === '""') set(driver, "current_city", city);
+    if (get(driver, "assigned_truck") === truck) set(driver, "assigned_truck", "null");
+    set(driver, "state", DRIVER_ON_DUTY);
+    const job = idx.byIdOrNull(get(driver, "driver_job"));
+    if (job && get(job, "cargo") === "null" && get(job, "source_company") === "null") {
+      set(job, "source_company", companyIn.get(city) ?? "null");
+      set(job, "start_time", now);
+    }
+
+    const time = now + FIRST_JOB_DELAY_MIN + ((i * 7) % FIRST_JOB_SPREAD_MIN);
+    const event: Unit = {
+      cls: "economy_event",
+      id: ids.take(),
+      lines: [
+        { key: "time", index: null, value: String(time) },
+        { key: "unit_link", index: null, value: driver.id },
+        { key: "param", index: null, value: String(EVENT_JOB_END) },
+      ],
+    };
+    doc.units.push(event);
+    // the queue is ordered by time and the game pops from the front
+    let at = times.length;
+    while (at > 0 && times[at - 1] > time) at--;
+    order.splice(at, 0, event.id);
+    times.splice(at, 0, time);
+  });
+  setArray(queue, "data", order);
+  const hours = Math.ceil((FIRST_JOB_DELAY_MIN + FIRST_JOB_SPREAD_MIN) / 60);
+  return [`dispatched ${postings.length} idle drivers: each takes a first job within ${hours} in-game hours`];
 }

@@ -17,7 +17,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { applyPlan, discoverySummary, type EditPlan, find, GARAGE_LARGE, loadSii, mergeDiscovery, saveSiiAsText, set, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, validate, visitAllCities } from "@truck/core";
+import { applyPlan, discoverMap, discoverySummary, dispatchIdleDrivers, type EditPlan, find, GARAGE_LARGE, loadSii, mergeDiscovery, saveSiiAsText, scanGameMap, set, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, validate, visitAllCities } from "@truck/core";
 
 const DEFAULT_DOCS = join(homedir(), "Documents", "Euro Truck Simulator 2");
 
@@ -87,8 +87,10 @@ interface EditArgs {
   dryRun: boolean;
   backup: boolean;
   visitCities: boolean;
+  gameDir: string | null;
   discoveryDonor: string | null;
   staff: StaffOptions | null;
+  dispatch: boolean;
 }
 
 function patchStaff(current: StaffOptions | null, patch: Partial<StaffOptions>): StaffOptions {
@@ -100,8 +102,10 @@ function parseArgs(args: string[]): EditArgs {
   let dryRun = false;
   let backup = true;
   let visitCities = false;
+  let gameDir: string | null = null;
   let discoveryDonor: string | null = null;
   let staff: StaffOptions | null = null;
+  let dispatch = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     const num = () => {
@@ -115,6 +119,9 @@ function parseArgs(args: string[]): EditArgs {
         break;
       case "--xp":
         plan.experience = num();
+        break;
+      case "--bus-xp":
+        plan.busExperience = num();
         break;
       case "--max-skills":
         plan.maxSkills = true;
@@ -133,6 +140,13 @@ function parseArgs(args: string[]): EditArgs {
         break;
       case "--visit-all-cities":
         visitCities = true;
+        break;
+      case "--discover-map":
+        gameDir = args[++i];
+        if (gameDir === undefined) throw new Error("--discover-map needs the game install folder");
+        break;
+      case "--dispatch-drivers":
+        dispatch = true;
         break;
       case "--import-discovery":
         discoveryDonor = args[++i];
@@ -160,7 +174,7 @@ function parseArgs(args: string[]): EditArgs {
         throw new Error(`unknown option ${a}`);
     }
   }
-  return { plan, dryRun, backup, visitCities, discoveryDonor, staff };
+  return { plan, dryRun, backup, visitCities, gameDir, discoveryDonor, staff, dispatch };
 }
 
 /**
@@ -204,10 +218,12 @@ function main(argv: string[]): void {
       const loaded = loadSii(path);
       const log = applyPlan(loaded.doc, args.plan);
       if (args.visitCities) log.push(...visitAllCities(loaded.doc));
+      if (args.gameDir !== null) log.push(...discoverMap(loaded.doc, scanGameMap(args.gameDir)));
       if (args.discoveryDonor !== null) {
         log.push(...mergeDiscovery(loaded.doc, loadSii(args.discoveryDonor).doc));
       }
       if (args.staff !== null) log.push(...staffGarages(loaded.doc, args.staff));
+      if (args.dispatch) log.push(...dispatchIdleDrivers(loaded.doc));
       for (const line of log) console.log(`  ${line}`);
       const problems = validate(loaded.doc);
       if (problems.length > 0) {
@@ -254,12 +270,15 @@ function main(argv: string[]): void {
           "  clone <srcSlot> <dstSlot> [--name N]  copy a save slot",
           "",
           "edit options:",
-          "  --money N --xp N --max-skills",
+          "  --money N --xp N --bus-xp N --max-skills   coach skills included",
           "  --garages | --garage-status N          buy/upgrade every garage",
           "  --repair --refuel                      restore all owned vehicles",
-          "  --visit-all-cities                     visit every city, unlock dealers+recruitment",
+          "  --visit-all-cities                     visit every city, unlock dealers+recruitment,",
+          "                                         discover every company and bus stop",
+          "  --discover-map <game install folder>   discover every road of the installed map",
           "  --import-discovery <donor game.sii>    merge discovered map items from another save",
           "  --staff-garages [--no-drivers]          park a truck + hire a driver per garage",
+          "  --dispatch-drivers                     send hired drivers without a job to work",
           "  --seed N --staff-limit N               control fleet randomisation and size",
           "  --dry-run --no-backup",
         ].join("\n"),

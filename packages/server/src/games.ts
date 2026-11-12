@@ -137,6 +137,29 @@ export function detectRoots(): GameRoot[] {
   return found.toSorted((a, b) => b.saves - a.saves);
 }
 
+/**
+ * Folder of the installed game, found through Steam's library list. Map
+ * discovery reads the sectors from the archives in there.
+ */
+export function findInstall(gameId: string): string | null {
+  const game = GAMES.find((g) => g.id === gameId);
+  if (!game) return null;
+  for (const steam of steamPaths()) {
+    const libraries = [steam];
+    const index = join(steam, "steamapps", "libraryfolders.vdf");
+    if (existsSync(index)) {
+      for (const match of readFileSync(index, "utf8").matchAll(/"path"\s+"([^"]+)"/g)) {
+        libraries.push(match[1].replaceAll("\\\\", "\\"));
+      }
+    }
+    for (const library of libraries) {
+      const path = join(library, "steamapps", "common", game.docsFolder);
+      if (existsSync(join(path, "base.scs"))) return path;
+    }
+  }
+  return null;
+}
+
 export interface RootCheck {
   ok: boolean;
   path: string;

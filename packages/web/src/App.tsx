@@ -108,8 +108,10 @@ export function App() {
     () =>
       Boolean(
         ops.visitAllCities ||
+          ops.discoverMap ||
           ops.importDiscovery ||
           ops.staff ||
+          ops.dispatchDrivers ||
           (ops.fields && ops.fields.length > 0) ||
           (ops.edits && Object.keys(ops.edits).length > 0),
       ),
@@ -276,7 +278,7 @@ export function App() {
                   <FleetTab detail={detail} ops={ops} setOps={setOps} />
                 </TabsContent>
                 <TabsContent value="Map">
-                  <MapTab detail={detail} ops={ops} setOps={setOps} />
+                  <MapTab gameId={root.id} detail={detail} ops={ops} setOps={setOps} />
                 </TabsContent>
                 <TabsContent value="Units">
                   <RawTab path={detail.path} ops={ops} setOps={setOps} />

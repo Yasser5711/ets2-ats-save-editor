@@ -1,10 +1,10 @@
 import { expect, test } from "vitest";
 import { sandboxSave } from "./sandbox.ts";
-import { SiiIndex, get, getArray, parseSii, setArray, stringifySii } from "../src/model.ts";
+import { SiiIndex, get, getArray, parseSii, setArray, stringifySii, type Unit } from "../src/model.ts";
 import { loadSii } from "../src/save.ts";
-import { applyPlan, validate } from "../src/edits.ts";
-import { staffGarages } from "../src/fleet.ts";
-import { visitAllCities, mergeDiscovery, allCities } from "../src/discovery.ts";
+import { applyPlan, summarize, validate } from "../src/edits.ts";
+import { countIdleDrivers, dispatchIdleDrivers, staffGarages } from "../src/fleet.ts";
+import { visitAllCities, mergeDiscovery, allCities, discoverMap, garageCities } from "../src/discovery.ts";
 import { IdAllocator, namelessId, namelessValue } from "../src/ids.ts";
 
 const SANDBOX = sandboxSave() ?? "";
@@ -29,17 +29,39 @@ test.skipIf(!hasSandbox)("the id allocator stays above every id already in the s
   for (const id of minted) expect((namelessValue(id) as bigint) > max).toBeTruthy();
 });
 
-test.skipIf(!hasSandbox)("visiting all cities fills the city arrays from the save's own garages", () => {
+test.skipIf(!hasSandbox)("visiting all cities covers cities without a garage and keeps the visit counts aligned", () => {
   const doc = loadSii(SANDBOX).doc;
-  visitAllCities(doc);
   const economy = new SiiIndex(doc).one("economy");
+  const visitedBefore = getArray(economy, "visited_cities");
+  const countsBefore = getArray(economy, "visited_cities_count");
+  visitAllCities(doc);
   const cities = allCities(doc);
-  expect(cities.length > 100).toBeTruthy();
-  expect(getArray(economy, "visited_cities")).toEqual(cities);
-  expect(get(economy, "visited_cities_count")).toBe(String(cities.length));
-  expect(getArray(economy, "unlocked_dealers")).toEqual(cities);
-  expect(getArray(economy, "unlocked_recruitments")).toEqual(cities);
+  const garages = garageCities(doc);
+  expect(garages.length > 100).toBeTruthy();
+  expect(cities.length > garages.length, "company-only cities count as cities").toBeTruthy();
+  const visited = getArray(economy, "visited_cities");
+  expect(visited.toSorted()).toEqual(cities);
+  // one count per city; cities the player really visited keep their own
+  const counts = getArray(economy, "visited_cities_count");
+  expect(counts.length).toBe(visited.length);
+  expect(visited.slice(0, visitedBefore.length)).toEqual(visitedBefore);
+  expect(counts.slice(0, countsBefore.length)).toEqual(countsBefore);
+  expect(getArray(economy, "unlocked_dealers")).toEqual(garages);
+  expect(getArray(economy, "unlocked_recruitments")).toEqual(garages);
+  for (const company of new SiiIndex(doc).all("company")) expect(get(company, "discovered")).toBe("true");
   expect(validate(doc)).toEqual([]);
+});
+
+test.skipIf(!hasSandbox)("discovering the map adds the installed items and keeps what the save knew", () => {
+  const doc = loadSii(SANDBOX).doc;
+  const economy = new SiiIndex(doc).one("economy");
+  const mine = getArray(economy, "discovered_items");
+  const scan = { items: new Set([mine[0], "42", "43"]), roads: 2, prefabs: 1, areas: 0, sectors: 1, unverified: 0, archives: [] };
+  discoverMap(doc, scan);
+  const after = getArray(economy, "discovered_items");
+  expect(after.length).toBe(mine.length + 2);
+  expect(after.slice(0, mine.length)).toEqual(mine);
+  expect(after.includes("42") && after.includes("43")).toBeTruthy();
 });
 
 test.skipIf(!hasSandbox)("merging discovery unions item ids without dropping our own", () => {
@@ -95,13 +117,16 @@ test.skipIf(!hasSandbox)("staffing garages parks unique cloned trucks and hires 
   const pl = idx.follow(eco, "player");
   const parked: string[] = [];
   const hired: string[] = [];
+  const homeOf = new Map<string, string>();
   for (const g of idx.all("garage")) {
     const vehicles = getArray(g, "vehicles");
     const drivers = getArray(g, "drivers");
     vehicles.forEach((v, i) => {
       if (v === "null") return;
       parked.push(v);
-      if (drivers[i] !== "null") hired.push(drivers[i]);
+      if (drivers[i] === "null") return;
+      hired.push(drivers[i]);
+      homeOf.set(drivers[i], g.id.replace(/^garage\./, ""));
     });
   }
   expect(new Set(parked).size).toBe( parked.length);
@@ -129,15 +154,45 @@ test.skipIf(!hasSandbox)("staffing garages parks unique cloned trucks and hires 
     }
   }
 
-  // AI drivers point at the truck standing in their own slot; the player's own
-  // driver record shares the HQ slot but has no assigned_truck field
+  // A hired driver only ever works off the event queue: it has to be on duty at
+  // its garage with exactly one "job ends" event ahead of the current game time.
+  const queue = getArray(idx.follow(eco, "event_queue"), "data").map((id) => idx.byIdOrNull(id) as Unit);
+  const times = queue.map((event) => Number(get(event, "time")));
+  expect(times.toSorted((a, b) => a - b), "the queue stays ordered by time").toEqual(times);
+  expect(countIdleDrivers(doc)).toBe(0);
+  let dispatched = 0;
   for (const driverId of hired) {
     const driver = idx.byIdOrNull(driverId);
     expect(driver).toBeTruthy();
     if (driver.cls !== "driver_ai") continue;
-    expect(parked.includes(get(driver, "assigned_truck"))).toBeTruthy();
+    dispatched++;
     expect(get(driver, "long_dist")).toBe("6");
+    expect(get(driver, "hometown")).toBe(homeOf.get(driverId));
+    expect(get(driver, "current_city")).toBe(homeOf.get(driverId));
+    expect(get(driver, "state")).toBe("2");
+    expect(get(driver, "assigned_truck")).toBe("null");
+    const events = queue.filter((event) => get(event, "unit_link") === driverId);
+    expect(events.map((event) => get(event, "param"))).toEqual(["4"]);
+    expect(Number(get(events[0], "time")) > Number(get(eco, "game_time"))).toBeTruthy();
   }
+  expect(dispatched).toBe(20);
+
+  // a second pass has nothing left to do
+  expect(dispatchIdleDrivers(doc)).toEqual([]);
+  expect(getArray(idx.follow(eco, "event_queue"), "data").length).toBe(queue.length);
+});
+
+test.skipIf(!hasSandbox)("max skills covers the coach skills and coach experience is its own field", () => {
+  const doc = loadSii(SANDBOX).doc;
+  const economy = new SiiIndex(doc).one("economy");
+  // the sandbox save predates the 1.62 coach skills; give it two of them
+  economy.lines.push({ key: "long_duty", index: null, value: "0" }, { key: "ecodriving", index: null, value: "1" });
+  const truckXp = get(economy, "experience_points");
+  applyPlan(doc, { busExperience: 123456.9, maxSkills: true });
+  expect(get(economy, "bus_experience_points")).toBe("123456");
+  expect(get(economy, "experience_points")).toBe(truckXp);
+  expect(summarize(doc).busSkills).toEqual({ long_duty: "3", ecodriving: "3" });
+  expect(get(economy, "long_dist")).toBe("6");
 });
 
 test.skipIf(!hasSandbox)("a garage slot may hold the player without a truck, a hired driver may not", () => {

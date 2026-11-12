@@ -1,8 +1,21 @@
-import { SiiIndex, get, set, getArray, setArray, type SiiDocument, type Unit } from "./model.ts";
+import { SiiIndex, find, get, set, getArray, setArray, type SiiDocument, type Unit } from "./model.ts";
 
 export const SKILL_MAX = 6;
 export const ADR_ALL = 63;
 export const SKILL_FIELDS = ["long_dist", "heavy", "fragile", "urgent", "mechanical"] as const;
+/**
+ * Coach driver skills, added to `economy` by game 1.62 next to
+ * `bus_experience_points`. Three ranks each (`max_rank` in /def/skill_data.sii).
+ */
+export const BUS_SKILL_MAX = 3;
+export const BUS_SKILL_FIELDS = [
+  "long_duty",
+  "tight_schedule",
+  "satisfaction_decrease",
+  "low_acceleration",
+  "satisfaction_increase",
+  "ecodriving",
+] as const;
 
 /**
  * `garage.status` and the number of vehicle/driver slots each size owns.
@@ -29,8 +42,12 @@ const WEAR_FIELDS = [
 export interface Summary {
   money: string;
   experience: string;
+  /** coach career experience, null for saves from before the Coaches update */
+  busExperience: string | null;
   adr: string;
   skills: Record<string, string>;
+  /** empty when the save has no coach skills */
+  busSkills: Record<string, string>;
   gameTime: string;
   hqCity: string;
   ownedTrucks: number;
@@ -48,11 +65,18 @@ export function summarize(doc: SiiDocument): Summary {
   const garages = idx.all("garage");
   const skills: Record<string, string> = {};
   for (const f of SKILL_FIELDS) skills[f] = get(economy, f);
+  const busSkills: Record<string, string> = {};
+  for (const f of BUS_SKILL_FIELDS) {
+    const line = find(economy, f);
+    if (line) busSkills[f] = line.value;
+  }
   return {
     money: get(bank, "money_account"),
     experience: get(economy, "experience_points"),
+    busExperience: find(economy, "bus_experience_points")?.value ?? null,
     adr: get(economy, "adr"),
     skills,
+    busSkills,
     gameTime: get(economy, "game_time"),
     hqCity: get(player, "hq_city"),
     ownedTrucks: getArray(player, "trucks").length,
@@ -66,6 +90,7 @@ export function summarize(doc: SiiDocument): Summary {
 export interface EditPlan {
   money?: number;
   experience?: number;
+  busExperience?: number;
   maxSkills?: boolean;
   garageStatus?: number;
   repairVehicles?: boolean;
@@ -86,12 +111,25 @@ export function applyPlan(doc: SiiDocument, plan: EditPlan): string[] {
     const before = set(economy, "experience_points", Math.trunc(plan.experience));
     log.push(`economy.experience_points: ${before} -> ${get(economy, "experience_points")}`);
   }
+  if (plan.busExperience !== undefined) {
+    if (!find(economy, "bus_experience_points")) {
+      throw new Error("this save has no coach career yet - load and save it once with game 1.61 or newer");
+    }
+    const before = set(economy, "bus_experience_points", Math.trunc(plan.busExperience));
+    log.push(`economy.bus_experience_points: ${before} -> ${get(economy, "bus_experience_points")}`);
+  }
   if (plan.maxSkills) {
     const before = set(economy, "adr", ADR_ALL);
     log.push(`economy.adr: ${before} -> ${ADR_ALL}`);
     for (const f of SKILL_FIELDS) {
       const prev = set(economy, f, SKILL_MAX);
       log.push(`economy.${f}: ${prev} -> ${SKILL_MAX}`);
+    }
+    for (const f of BUS_SKILL_FIELDS) {
+      const line = find(economy, f);
+      if (!line) continue;
+      log.push(`economy.${f}: ${line.value} -> ${BUS_SKILL_MAX}`);
+      line.value = String(BUS_SKILL_MAX);
     }
   }
   if (plan.garageStatus !== undefined) {
@@ -192,10 +230,16 @@ export function validate(doc: SiiDocument): string[] {
         problems.push(`${g.id}: hired driver ${driver} in slot ${i} has no truck in that slot`);
         return;
       }
-      if (get(unit, "assigned_truck") !== truck) {
-        problems.push(`${driver}: assigned_truck does not match the truck in ${g.id} slot ${i}`);
+      // null in the game's own saves: a driver takes the truck standing in its slot
+      const assigned = get(unit, "assigned_truck");
+      if (assigned !== "null" && idx.byIdOrNull(assigned) === null) {
+        problems.push(`${driver}: assigned_truck points at missing unit ${assigned}`);
       }
     });
+  }
+  const queue = idx.byIdOrNull(get(economy, "event_queue"));
+  for (const ref of queue ? getArray(queue, "data") : []) {
+    if (idx.byIdOrNull(ref) === null) problems.push(`event queue references missing unit ${ref}`);
   }
   const player = idx.byIdOrNull(get(economy, "player"));
   if (player) {

@@ -37,6 +37,14 @@ export function EditorTab({ detail, ops, setOps }: Props) {
               placeholder="unchanged"
               onChange={(v) => patch({ experience: v === "" ? undefined : Number(v) })}
             />
+            {detail.summary.busExperience !== null && (
+              <NumberField
+                label={`coach experience · now ${money(detail.summary.busExperience)}`}
+                value={edits.busExperience?.toString() ?? ""}
+                placeholder="unchanged"
+                onChange={(v) => patch({ busExperience: v === "" ? undefined : Number(v) })}
+              />
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {AMOUNTS.map((amount) => (
@@ -47,6 +55,11 @@ export function EditorTab({ detail, ops, setOps }: Props) {
             <Button variant="outline" size="sm" onClick={() => patch({ experience: 10_000_000 })}>
               max level xp
             </Button>
+            {detail.summary.busExperience !== null && (
+              <Button variant="outline" size="sm" onClick={() => patch({ busExperience: 10_000_000 })}>
+                max coach level xp
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -60,15 +73,15 @@ export function EditorTab({ detail, ops, setOps }: Props) {
             <Badge variant="secondary" className="font-mono">
               adr {detail.summary.adr}
             </Badge>
-            {Object.entries(detail.summary.skills).map(([skill, level]) => (
+            {Object.entries({ ...detail.summary.skills, ...detail.summary.busSkills }).map(([skill, level]) => (
               <Badge key={skill} variant="secondary" className="font-mono">
                 {skill} {level}
               </Badge>
             ))}
           </div>
           <ToggleRow
-            label="All skills to 6 stars, every ADR class"
-            hint="long distance, high value, fragile, urgent, mechanical"
+            label="All skills to the maximum, every ADR class"
+            hint="truck skills to 6 stars, coach skills to rank 3"
             checked={Boolean(edits.maxSkills)}
             onChange={(v) => patch({ maxSkills: v || undefined })}
           />

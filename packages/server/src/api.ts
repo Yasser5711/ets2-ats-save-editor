@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmdirSync, statSync, unlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { detectRoots, isRunning, listProfiles, readGameLog, validateRoot, GAMES } from "./games.ts";
-import { allCities, applyPlan, discoverySummary, type EditPlan, GARAGE_CAPACITY, get, getArray, loadSii, mergeDiscovery, saveSiiAsText, set, type SiiDocument, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, type Unit, validate, visitAllCities } from "@truck/core";
+import { detectRoots, findInstall, isRunning, listProfiles, readGameLog, validateRoot, GAMES } from "./games.ts";
+import { allCities, applyPlan, countIdleDrivers, discoverMap, discoverySummary, dispatchIdleDrivers, type EditPlan, GARAGE_CAPACITY, get, getArray, loadSii, type MapScan, mergeDiscovery, saveSiiAsText, scanGameMap, set, type SiiDocument, SiiIndex, staffGarages, type StaffOptions, stringifySii, summarize, type Unit, validate, visitAllCities } from "@truck/core";
 
 export interface FieldEdit {
   unitId: string;
@@ -12,8 +12,11 @@ export interface FieldEdit {
 export interface Ops {
   edits?: EditPlan;
   visitAllCities?: boolean;
+  /** folder of the installed game; its whole map is marked as discovered */
+  discoverMap?: string;
   importDiscovery?: string;
   staff?: StaffOptions | null;
+  dispatchDrivers?: boolean;
   fields?: FieldEdit[];
 }
 
@@ -124,6 +127,7 @@ export function saveDetail(path: string) {
     discovery: discoverySummary(loaded.doc),
     cities: allCities(loaded.doc).length,
     drivers: getArray(player, "drivers").length,
+    idleDrivers: countIdleDrivers(loaded.doc),
     driverPool: getArray(economy, "driver_pool").length,
     garages: garages.toSorted((a, b) => a.city.localeCompare(b.city)),
     trucks: trucks.toSorted((a, b) => a.garage.localeCompare(b.garage)),
@@ -131,14 +135,23 @@ export function saveDetail(path: string) {
   };
 }
 
+/** A scan reads every map sector of the game, and a preview re-runs the ops on each change. */
+const mapScans = new Map<string, MapScan>();
+
 function runOps(doc: SiiDocument, ops: Ops): string[] {
   const log: string[] = [];
   if (ops.edits) log.push(...applyPlan(doc, ops.edits));
   if (ops.visitAllCities) log.push(...visitAllCities(doc));
+  if (ops.discoverMap) {
+    const scan = mapScans.get(ops.discoverMap) ?? scanGameMap(ops.discoverMap);
+    mapScans.set(ops.discoverMap, scan);
+    log.push(...discoverMap(doc, scan));
+  }
   if (ops.importDiscovery) {
     log.push(...mergeDiscovery(doc, loadSii(ops.importDiscovery).doc));
   }
   if (ops.staff) log.push(...staffGarages(doc, ops.staff));
+  if (ops.dispatchDrivers) log.push(...dispatchIdleDrivers(doc));
   for (const edit of ops.fields ?? []) {
     const unit = new SiiIndex(doc).byIdOrNull(edit.unitId);
     if (!unit) throw new Error(`unit ${edit.unitId} not found`);
@@ -255,4 +268,4 @@ export async function environment() {
   return { roots, games: GAMES.map((g) => ({ id: g.id, name: g.name })) };
 }
 
-export { listProfiles, readGameLog, validateRoot };
+export { findInstall, listProfiles, readGameLog, validateRoot };

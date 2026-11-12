@@ -7,6 +7,7 @@ import {
   backupsOf,
   environment,
   exportText,
+  findInstall,
   listProfiles,
   planOps,
   readGameLog,
@@ -72,6 +73,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
       return send(res, 200, validateRoot(path));
     case "GET /api/env":
       return send(res, 200, await environment());
+    case "GET /api/install":
+      return send(res, 200, { path: findInstall(url.searchParams.get("game") ?? "") });
     case "GET /api/profiles":
       return send(res, 200, listProfiles(url.searchParams.get("root") ?? ""));
     case "GET /api/save":
