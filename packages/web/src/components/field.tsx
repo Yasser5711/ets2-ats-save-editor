@@ -1,49 +1,30 @@
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 
-export function NumberField({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
+interface Props {
   label: string;
-  value: string;
-  onChange: (next: string) => void;
+  /** undefined leaves the save's own value alone */
+  value: number | undefined;
+  onChange: (next: number | undefined) => void;
   placeholder?: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-muted-foreground text-[10px] tracking-widest uppercase">{label}</Label>
-      <Input
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="tabular font-mono"
-      />
-    </div>
-  );
+  disabled?: boolean;
 }
 
-export function ToggleRow({
-  label,
-  hint,
-  checked,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
-}) {
+/** A whole number that may be left empty. */
+export function NumberField({ label, value, onChange, placeholder, disabled }: Props) {
   return (
-    <label className="hover:bg-accent/40 flex cursor-pointer items-start gap-3 rounded-md p-2 transition-colors">
-      <Switch checked={checked} onCheckedChange={onChange} className="mt-0.5" />
-      <span className="min-w-0">
-        <span className="block text-sm">{label}</span>
-        {hint && <span className="text-muted-foreground block text-xs">{hint}</span>}
-      </span>
+    <label className="block space-y-1.5">
+      <span className="text-muted-foreground block text-[13px]">{label}</span>
+      <Input
+        inputMode="numeric"
+        value={value === undefined ? "" : String(value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, "");
+          onChange(digits === "" ? undefined : Number(digits));
+        }}
+        className="tabular"
+      />
     </label>
   );
 }

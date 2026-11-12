@@ -31,11 +31,16 @@ orphaned unit pointers and mismatched parallel arrays.
 | Fleet | park a mint truck in every garage and hire a driver for it, cloned from your own dealer stock so every part exists in your DLC set; send hired drivers that sit idle to work |
 | Map | discover every road straight from the installed game files, visit every city, unlock all dealers and recruitment agencies, put every company and bus stop on the map |
 | Vehicles | repair including permanent wear, refuel, reset odometers |
-| Units | search all ~28 000 units and edit single fields with a diff preview |
-| Doctor | timestamped backups with one-click restore, plus `game.log.txt` triage |
+| Raw data | search all ~28 000 records and edit single values, with the result checked before it is written |
+| Backups | a copy of every save that is replaced, restored with one click, plus `game.log.txt` triage |
 
 Saves are written as plain `SiiNunit` text, which both games load regardless of the
 `g_save_format` setting - no re-encryption, no HMAC risk.
+
+The interface is in English and French. Everything common is a switch on one page - money, levels,
+garages, fleet, map - with what the save has today next to it. A bar at the bottom of the window
+lists the pending changes in plain words, says whether the result is safe, and offers the two
+ways to write it: as a new save, or over the opened one with a backup.
 
 ## Install and run
 
@@ -61,12 +66,17 @@ pnpm test           # vitest, 27 tests across core and server
 pnpm typecheck      # tsc across every package
 pnpm lint           # oxlint
 pnpm dev:web        # Vite with HMR against a running server
-pnpm package        # release/truck-save-editor.exe (UI embedded, single file)
+pnpm package        # release/truck-save-editor.exe: the portable app, one file
 ```
 
-Every [release](../../releases) ships two Windows executables: the **desktop installer**
-(~27 MB, native window) and the **portable** build (~95 MB, serves the UI on localhost). Neither
-needs Node installed.
+Every [release](../../releases) ships two Windows executables, and both open the same native
+window:
+
+- the **installer** (~30 MB download) puts the app and its server side by side in your user folder;
+- the **portable app** (~100 MB) is one file to run from anywhere. It carries the server inside
+  and unpacks it once to `%LOCALAPPDATA%\com.yassermekhfi.trucksaveeditor`.
+
+Neither needs Node installed; both use the WebView2 runtime that ships with Windows 10 and 11.
 
 On first start the app asks where your saves are. It scans both places the games use:
 
@@ -97,13 +107,14 @@ node packages/cli/dist/cli.js decode "<file>" out.txt
 ```
 packages/core     ScsC crypto, BSII v1-3 decoder, SiiNunit model, HashFS archive reader, map sector scan, edit operations, validator
 packages/cli      command line front end
-packages/server   local HTTP API, profile discovery, backups, log triage, exe packaging
-packages/web      React + Tailwind + shadcn/ui interface
-packages/desktop  Tauri v2 shell: native window, folder picker, sidecar lifecycle
+packages/server   local HTTP API, profile discovery, backups, log triage
+packages/web      React + Tailwind + shadcn/ui interface, English and French
+packages/desktop  Tauri v2 shell: native window, folder picker, server lifecycle
 ```
 
-The desktop app is a Tauri shell (4.7 MB) that spawns the compiled server as a sidecar on a
-random free port and loads the same interface in a native webview. The editing core stays in
+The desktop app is a Tauri shell (4.7 MB) that starts the compiled server on a random free port
+and loads the interface in a native webview. The installer ships that server as a sidecar; the
+`portable` cargo feature embeds it in the executable instead. The editing core stays in
 TypeScript, so the decoder verified against real saves is the one that ships.
 
 ## Safety
@@ -111,7 +122,7 @@ TypeScript, so the decoder verified against real saves is the one that ships.
 - Edits can be written to a **new save slot**, leaving the original untouched.
 - Overwriting a slot first copies the current save into `<slot>/backups/`.
 - Nothing is written while the validator reports a problem.
-- The header warns when the game is running, because it overwrites saves on exit.
+- A banner warns when the game is running, because it overwrites saves on exit.
 
 Tested against real 1.61 and 1.62 profiles: 45 profile and save files decode and round-trip byte for
 byte, and the decoder matches the reference file published with `SII_Decrypt`.

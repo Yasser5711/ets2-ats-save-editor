@@ -1,0 +1,82 @@
+name: windows executables
+
+# Builds the installer and the portable app once, checks that the portable app
+# really starts, and hands both over as one artifact. `ci` runs it for every
+# change, `release` attaches its output to the GitHub release.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: build the installer
+        run: pnpm desktop:build
+
+      # second, because it rebuilds the app with the server inside and replaces
+      # the executable the installer was just made from
+      - name: build the portable app
+        run: pnpm package
+
+      - name: start the portable app from an empty folder
+        shell: pwsh
+        run: |
+          $solo = New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/solo" -Force
+          Copy-Item release/truck-save-editor.exe $solo
+          $app = Start-Process -FilePath "$solo/truck-save-editor.exe" -WorkingDirectory $solo -PassThru
+          try {
+            $port = $null
+            foreach ($attempt in 1..30) {
+              Start-Sleep -Seconds 1
+              $server = Get-Process -Name "truck-save-server-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if (-not $server) { continue }
+              $port = (Get-NetTCPConnection -OwningProcess $server.Id -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).LocalPort
+              if ($port) { break }
+            }
+            if (-not $port) { throw "the app did not unpack and start its server" }
+            Invoke-WebRequest -Uri "http://127.0.0.1:$port/api/env" -UseBasicParsing | Out-Null
+            if ($app.HasExited) { throw "the app window closed on its own" }
+          } finally {
+            Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+            Get-Process -Name "truck-save-server-*" -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+
+      - name: put the installer next to the portable app
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          if (-not $installer) { throw "tauri produced no installer" }
+          Copy-Item $installer release/truck-save-editor-setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: truck-save-editor-windows
+          path: release/*.exe
+          if-no-files-found: error

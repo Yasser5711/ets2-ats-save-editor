@@ -14,7 +14,7 @@
   },
   "rules": {
     "no-console": "off",
-    "no-underscore-dangle": ["error", { "allow": ["__TAURI__", "__TAURI_INTERNALS__", "__WEB_ASSETS"] }],
+    "no-underscore-dangle": ["error", { "allow": ["__TAURI__", "__TAURI_INTERNALS__"] }],
     "typescript/no-explicit-any": "error",
     "typescript/consistent-type-imports": "error",
     "unicorn/prefer-node-protocol": "error",

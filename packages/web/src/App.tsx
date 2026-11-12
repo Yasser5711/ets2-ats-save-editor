@@ -1,35 +1,52 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, FolderOpen, Loader2, RotateCcw, Save, SaveAll, Truck } from "lucide-react";
+import { AlertTriangle, FolderOpen, Languages, MousePointerClick, Truck } from "lucide-react";
 import { api, type GameRoot, type Ops, type PlanResult, type Profile, type SaveDetail } from "@/api.ts";
-import { initPlatform, isDesktop, loadSettings, pickFolder, saveSettings } from "@/lib/platform.ts";
+import { pendingChanges } from "@/lib/changes.ts";
+import { useI18n } from "@/lib/i18n.tsx";
+import { initPlatform, loadSettings, pickFolder, saveSettings } from "@/lib/platform.ts";
+import { ChangeBar } from "@/components/change-bar.tsx";
+import { Overview } from "@/components/overview.tsx";
+import { SaveList } from "@/components/save-list.tsx";
 import { SetupScreen } from "@/components/setup-screen.tsx";
-import { StatCard, money } from "@/components/stat-card.tsx";
-import { EditorTab } from "@/tabs/Editor.tsx";
-import { GaragesTab } from "@/tabs/Garages.tsx";
-import { FleetTab } from "@/tabs/Fleet.tsx";
-import { MapTab } from "@/tabs/Map.tsx";
-import { RawTab } from "@/tabs/Raw.tsx";
-import { DoctorTab } from "@/tabs/Doctor.tsx";
+import { AdvancedTab } from "@/tabs/Advanced.tsx";
+import { ListsTab } from "@/tabs/Lists.tsx";
+import { QuickTab } from "@/tabs/Quick.tsx";
+import { RescueTab } from "@/tabs/Rescue.tsx";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 
-const TABS = ["Career", "Garages", "Fleet", "Map", "Units", "Doctor"] as const;
+const TABS = ["quick", "lists", "advanced", "rescue"] as const;
+type Tab = (typeof TABS)[number];
+
+const two = (n: number) => String(n).padStart(2, "0");
+
+/** Local day and time in plain ASCII, safe inside a save's display name. */
+function stamp(now: Date): string {
+  return `${two(now.getDate())}-${two(now.getMonth() + 1)} ${two(now.getHours())}h${two(now.getMinutes())}`;
+}
+
+/** The dry run of one request; a newer request makes it stale. */
+interface Preview {
+  key: string;
+  plan: PlanResult | null;
+  error: string | null;
+}
 
 export function App() {
+  const i18n = useI18n();
+  const { t, lang, setLang } = i18n;
   const [ready, setReady] = useState(false);
   const [root, setRoot] = useState<GameRoot | null>(null);
+  const [running, setRunning] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [slotPath, setSlotPath] = useState<string | null>(null);
   const [detail, setDetail] = useState<SaveDetail | null>(null);
+  const [tab, setTab] = useState<Tab>("quick");
   const [ops, setOps] = useState<Ops>({});
-  const [plan, setPlan] = useState<PlanResult | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [writing, setWriting] = useState(false);
 
   useEffect(() => {
     const boot = async () => {
@@ -40,7 +57,7 @@ export function App() {
         if (check.ok) {
           setRoot({
             id: settings.gameId ?? "ets2",
-            name: check.game ?? "Game folder",
+            name: check.game ?? "",
             path: settings.root,
             running: false,
             source: "documents",
@@ -64,26 +81,25 @@ export function App() {
     setRoot(chosen);
     setSlotPath(null);
     setDetail(null);
+    setOps({});
     void saveSettings({ root: chosen.path, gameId: chosen.id });
   };
 
   const changeFolder = async () => {
-    const chosen = await pickFolder("Select the game folder");
+    const chosen = await pickFolder(t("setup.pickTitle"));
     if (chosen === null) return;
     const check = await api.validateRoot(chosen);
     if (!check.ok) {
-      toast.error("That folder has no profiles inside");
+      toast.error(t("setup.noProfiles", { path: chosen }));
       return;
     }
     if (check.saves === 0) {
-      toast.warning("That folder holds profiles but no saves", {
-        description: "Steam Cloud keeps them under Steam\\userdata\\<account>\\<appid>\\remote",
-      });
+      toast.warning(t("setup.cloudHint", { path: chosen }));
       return;
     }
     chooseRoot({
       id: check.game?.includes("American") ? "ats" : (root?.id ?? "ets2"),
-      name: check.game ?? "Game folder",
+      name: check.game ?? "",
       path: chosen,
       running: false,
       source: "documents",
@@ -92,247 +108,178 @@ export function App() {
     });
   };
 
+  const gameId = root?.id ?? "ets2";
+
   const loadSlot = (path: string) => {
     setSlotPath(path);
     setDetail(null);
     setOps({});
-    setPlan(null);
-    setBusy("reading save");
-    const read = async () => setDetail(await api.save(path));
-    read()
-      .catch((e: Error) => toast.error(e.message))
-      .finally(() => setBusy(null));
+    setPreview(null);
+    const read = async () => {
+      // asked again for every save that is opened: the game may have been started since
+      const [save, env] = await Promise.all([api.save(path), api.env()]);
+      setDetail(save);
+      setRunning(env.roots.some((candidate) => candidate.id === gameId && candidate.running));
+    };
+    read().catch((e: Error) => toast.error(e.message));
   };
 
-  const dirty = useMemo(
-    () =>
-      Boolean(
-        ops.visitAllCities ||
-          ops.discoverMap ||
-          ops.importDiscovery ||
-          ops.staff ||
-          ops.dispatchDrivers ||
-          (ops.fields && ops.fields.length > 0) ||
-          (ops.edits && Object.keys(ops.edits).length > 0),
-      ),
-    [ops],
-  );
+  const staged = pendingChanges(ops, i18n, gameId).length;
+  // undefined values vanish in JSON, so this only changes when the request does
+  const request = JSON.stringify(ops);
+  const previewKey = `${slotPath}\n${request}`;
 
   useEffect(() => {
-    if (!slotPath || !dirty) return;
+    if (!slotPath || staged === 0) return;
     let alive = true;
-    setBusy("previewing");
-    const preview = async () => {
+    const run = async () => {
       try {
-        const result = await api.plan(slotPath, ops);
-        if (alive) setPlan(result);
+        const plan = await api.plan(slotPath, JSON.parse(request) as Ops);
+        if (alive) setPreview({ key: previewKey, plan, error: null });
       } catch (e) {
-        if (alive) toast.error((e as Error).message);
-      } finally {
-        if (alive) setBusy(null);
+        if (alive) setPreview({ key: previewKey, plan: null, error: (e as Error).message });
       }
     };
-    void preview();
+    void run();
     return () => {
       alive = false;
     };
-  }, [slotPath, ops, dirty]);
+  }, [slotPath, request, staged, previewKey]);
+  const current = preview?.key === previewKey ? preview : null;
 
   const apply = (cloneAs?: string) => {
     if (!slotPath) return;
-    setBusy(cloneAs ? "writing new slot" : "writing save");
+    setWriting(true);
     const write = async () => {
       const result = await api.apply(slotPath, ops, cloneAs);
       if (!result.written) {
-        toast.error("Refused to write", { description: result.problems.slice(0, 2).join("; ") });
+        toast.error(t("done.refused"), { description: result.problems.slice(0, 2).join("; ") });
         return;
       }
-      toast.success(cloneAs ? "Written to a new save slot" : "Save written", {
-        description: cloneAs ? result.target : `backup kept as backups/${result.backup}`,
-      });
-      setOps({});
-      loadSlot(cloneAs ? result.target : slotPath);
+      if (cloneAs) toast.success(t("done.new"), { description: t("done.newHint", { name: cloneAs }) });
+      else toast.success(t("done.overwrite"), { description: t("done.overwriteHint") });
+      loadSlot(result.target);
       if (root) setProfiles(await api.profiles(root.path));
     };
     write()
       .catch((e: Error) => toast.error(e.message))
-      .finally(() => setBusy(null));
+      .finally(() => setWriting(false));
   };
 
   if (!ready) {
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center gap-2 text-sm">
-        <Loader2 className="size-4 animate-spin" /> starting
-      </div>
-    );
+    return <p className="text-muted-foreground flex h-full items-center justify-center text-sm">{t("app.starting")}</p>;
   }
+
+  const language = (
+    <Button variant="ghost" size="sm" onClick={() => setLang(lang === "fr" ? "en" : "fr")}>
+      <Languages /> {t("app.otherLanguage")}
+    </Button>
+  );
 
   if (!root) {
     return (
       <>
+        <div className="absolute top-3 right-4">{language}</div>
         <SetupScreen onPick={chooseRoot} />
         <Toaster />
       </>
     );
   }
 
-  const blocked = !dirty || (plan?.problems.length ?? 0) > 0;
+  const slot = profiles.flatMap((profile) => profile.slots).find((candidate) => candidate.path === slotPath);
 
   return (
     <div className="flex h-full flex-col">
-      <header className="bg-card flex items-center gap-3 border-b px-4 py-2.5">
-        <span className="text-primary flex items-center gap-2 text-sm font-semibold tracking-wide">
+      <header className="bg-card flex items-center gap-2 border-b px-4 py-2">
+        <span className="text-primary flex items-center gap-2 pr-2 text-sm font-semibold">
           <Truck className="size-4" /> Truck Save Editor
         </span>
-        <Separator orientation="vertical" className="h-5" />
-        <Button variant="ghost" size="sm" onClick={changeFolder} className="max-w-md">
-          <FolderOpen className="size-4" />
-          <span className="truncate font-mono text-xs">{root.path}</span>
+        <Button variant="ghost" size="sm" onClick={changeFolder} title={t("header.folder")} className="max-w-md">
+          <FolderOpen />
+          <span className="text-muted-foreground truncate font-mono text-xs">{root.path}</span>
         </Button>
-        {root.running && (
-          <Badge variant="destructive" className="gap-1">
-            <AlertTriangle className="size-3" /> game running
-          </Badge>
-        )}
-        <div className="text-muted-foreground ml-auto flex items-center gap-3 text-xs">
-          {busy && (
-            <span className="text-primary flex items-center gap-1.5">
-              <Loader2 className="size-3 animate-spin" /> {busy}
-            </span>
-          )}
-          {detail && <span className="tabular">{detail.units.toLocaleString()} units</span>}
-          {isDesktop() && <Badge variant="outline">desktop</Badge>}
-        </div>
+        <div className="ml-auto">{language}</div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="bg-sidebar w-72 shrink-0 border-r">
-          <ScrollArea className="h-full">
-            <div className="space-y-4 p-3">
-              {profiles.map((profile) => (
-                <div key={profile.path}>
-                  <div className="text-muted-foreground flex items-center gap-2 px-1 pb-1 text-xs font-semibold">
-                    {profile.name}
-                    {profile.steam && <Badge variant="outline">steam</Badge>}
-                  </div>
-                  {profile.slots.map((slot) => (
-                    <button
-                      key={slot.path}
-                      onClick={() => loadSlot(slot.path)}
-                      className={`hover:bg-accent block w-full cursor-pointer rounded-md px-2 py-1.5 text-left transition-colors ${
-                        slotPath === slot.path ? "bg-accent ring-primary/50 ring-1" : ""
-                      }`}
-                    >
-                      <span className="block truncate text-xs font-medium">{slot.name || slot.slot}</span>
-                      <span className="text-muted-foreground block truncate text-[10px]">
-                        {slot.slot} · {slot.modified.slice(0, 16).replace("T", " ")} ·{" "}
-                        {(slot.bytes / 1048576).toFixed(1)} MB{!slot.encrypted && " · text"}
-                      </span>
-                    </button>
-                  ))}
+        <SaveList profiles={profiles} selected={slotPath} onPick={loadSlot} />
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {running && (
+            <p className="flex items-center gap-2 border-b border-amber-400/30 bg-amber-400/10 px-6 py-2.5 text-sm text-amber-200">
+              <AlertTriangle className="size-4 shrink-0" /> {t("banner.running")}
+            </p>
+          )}
+
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-5xl space-y-5 p-6">
+              {slotPath === null && (
+                <div className="mx-auto max-w-md space-y-3 pt-24 text-center">
+                  <span className="bg-primary/12 text-primary mx-auto flex size-12 items-center justify-center rounded-xl">
+                    <MousePointerClick className="size-6" />
+                  </span>
+                  <h1 className="text-lg font-semibold">{t("empty.title")}</h1>
+                  <p className="text-muted-foreground text-sm text-pretty">{t("empty.body")}</p>
+                  <p className="text-muted-foreground text-[13px] text-pretty">{t("empty.tip")}</p>
                 </div>
-              ))}
-              {profiles.length === 0 && (
-                <p className="text-muted-foreground p-2 text-xs">no profiles in this folder</p>
+              )}
+
+              {slotPath !== null && !detail && (
+                <div className="animate-pulse space-y-5" aria-busy="true" aria-label={t("busy.reading")}>
+                  <div className="bg-muted h-7 w-64 rounded-md" />
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                    {[1, 2, 3, 4, 5, 6].map((tile) => (
+                      <div key={tile} className="bg-muted h-[4.5rem] rounded-xl" />
+                    ))}
+                  </div>
+                  <div className="bg-muted h-40 rounded-xl" />
+                  <div className="bg-muted h-56 rounded-xl" />
+                </div>
+              )}
+
+              {detail && (
+                <>
+                  <h1 className="truncate text-xl font-semibold tracking-tight">{slot?.name || slot?.slot}</h1>
+                  <Overview gameId={gameId} detail={detail} />
+                  <Tabs value={tab} onValueChange={(next) => setTab(next as Tab)} className="gap-4">
+                    <TabsList>
+                      {TABS.map((key) => (
+                        <TabsTrigger key={key} value={key} className="px-3">
+                          {t(`tab.${key}`)}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    <TabsContent value="quick">
+                      <QuickTab gameId={gameId} detail={detail} ops={ops} setOps={setOps} />
+                    </TabsContent>
+                    <TabsContent value="lists">
+                      <ListsTab detail={detail} ops={ops} setOps={setOps} />
+                    </TabsContent>
+                    <TabsContent value="advanced">
+                      <AdvancedTab detail={detail} ops={ops} setOps={setOps} />
+                    </TabsContent>
+                    <TabsContent value="rescue">
+                      <RescueTab root={root} detail={detail} onRestored={() => loadSlot(detail.path)} />
+                    </TabsContent>
+                  </Tabs>
+                </>
               )}
             </div>
-          </ScrollArea>
-        </aside>
-
-        <main className="min-w-0 flex-1 overflow-y-auto p-5">
-          {!detail && <p className="text-muted-foreground text-sm">Pick a save on the left to begin.</p>}
+          </main>
 
           {detail && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <StatCard label="money" value={money(detail.summary.money)} />
-                <StatCard label="experience" value={money(detail.summary.experience)} />
-                <StatCard
-                  label="garages"
-                  value={`${detail.summary.garagesOwned}/${detail.summary.garagesTotal}`}
-                />
-                <StatCard label="trucks" value={detail.trucks.length} hint={`${detail.drivers - 1} drivers`} />
-                <StatCard
-                  label="cities"
-                  value={`${detail.summary.visitedCities}/${detail.cities}`}
-                  hint="visited"
-                />
-                <StatCard label="hq" value={detail.summary.hqCity} hint={detail.container} />
-              </div>
-
-              <Tabs defaultValue="Career">
-                <TabsList>
-                  {TABS.map((tab) => (
-                    <TabsTrigger key={tab} value={tab}>
-                      {tab}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                <TabsContent value="Career">
-                  <EditorTab detail={detail} ops={ops} setOps={setOps} />
-                </TabsContent>
-                <TabsContent value="Garages">
-                  <GaragesTab detail={detail} ops={ops} setOps={setOps} />
-                </TabsContent>
-                <TabsContent value="Fleet">
-                  <FleetTab detail={detail} ops={ops} setOps={setOps} />
-                </TabsContent>
-                <TabsContent value="Map">
-                  <MapTab gameId={root.id} detail={detail} ops={ops} setOps={setOps} />
-                </TabsContent>
-                <TabsContent value="Units">
-                  <RawTab path={detail.path} ops={ops} setOps={setOps} />
-                </TabsContent>
-                <TabsContent value="Doctor">
-                  <DoctorTab root={root} path={detail.path} />
-                </TabsContent>
-              </Tabs>
-
-              <Card>
-                <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle className="text-xs tracking-widest uppercase">pending changes</CardTitle>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setOps({})} disabled={!dirty}>
-                      <RotateCcw className="size-3.5" /> reset
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => apply(`edited ${new Date().toISOString().slice(5, 16)}`)}
-                      disabled={blocked}
-                    >
-                      <SaveAll className="size-3.5" /> new slot
-                    </Button>
-                    <Button size="sm" onClick={() => apply()} disabled={blocked}>
-                      <Save className="size-3.5" /> overwrite
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {!dirty && <p className="text-muted-foreground text-sm">No changes staged.</p>}
-                  {dirty && plan && (
-                    <div className="space-y-2">
-                      {plan.problems.length > 0 && (
-                        <div className="border-destructive/60 bg-destructive/10 text-destructive-foreground space-y-1 rounded-md border p-2 text-xs">
-                          {plan.problems.slice(0, 6).map((problem) => (
-                            <div key={problem}>{problem}</div>
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-muted-foreground text-xs">
-                        units {plan.unitsBefore.toLocaleString()} → {plan.unitsAfter.toLocaleString()} ·{" "}
-                        {plan.discovery}
-                      </p>
-                      <pre className="bg-muted/40 max-h-60 overflow-auto rounded-md p-3 font-mono text-xs leading-relaxed">
-                        {plan.log.join("\n")}
-                      </pre>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            <ChangeBar
+              gameId={gameId}
+              ops={ops}
+              setOps={setOps}
+              plan={current?.plan ?? null}
+              planError={current?.error ?? null}
+              writing={writing}
+              onSaveNew={() => apply(t("bar.newName", { date: stamp(new Date()) }))}
+              onOverwrite={() => apply()}
+            />
           )}
-        </main>
+        </div>
       </div>
       <Toaster />
     </div>

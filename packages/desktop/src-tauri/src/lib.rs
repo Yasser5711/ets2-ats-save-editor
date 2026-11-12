@@ -54,8 +54,45 @@ fn write_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), Strin
     fs::write(path, raw).map_err(|e| e.to_string())
 }
 
+/// The server the portable executable carries inside itself.
+pub struct EmbeddedServer {
+    /// identifies this exact build of the server
+    pub id: &'static str,
+    pub bytes: &'static [u8],
+}
+
+/// Writes the embedded server to the app's data folder, once per build of the
+/// server, and returns where it is.
+fn unpack_server(app: &tauri::AppHandle, server: &EmbeddedServer) -> Result<PathBuf, String> {
+    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let name = format!("truck-save-server-{}.exe", server.id);
+    let path = dir.join(&name);
+    let unpacked = fs::metadata(&path).is_ok_and(|meta| meta.len() == server.bytes.len() as u64);
+    if !unpacked {
+        // written under another name first, so a start that is interrupted
+        // half way never leaves a truncated executable behind
+        let partial = dir.join(format!("{name}.part"));
+        fs::write(&partial, server.bytes).map_err(|e| e.to_string())?;
+        fs::rename(&partial, &path).map_err(|e| e.to_string())?;
+    }
+    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
+        let other = entry.file_name().to_string_lossy().into_owned();
+        if other.starts_with("truck-save-server-") && other != name {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+    Ok(path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    launch(None)
+}
+
+/// Starts the app. The installer ships the server next to the app as a sidecar;
+/// the portable build passes in the one it carries instead.
+pub fn launch(embedded_server: Option<EmbeddedServer>) {
     let port = free_port();
 
     tauri::Builder::default()
@@ -67,11 +104,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![api_port, read_settings, write_settings])
         .setup(move |app| {
-            let sidecar = app
-                .shell()
-                .sidecar("truck-save-server")?
-                .env("PORT", port.to_string());
-            let (_rx, child) = sidecar.spawn()?;
+            let server = match &embedded_server {
+                Some(embedded) => app.shell().command(unpack_server(app.handle(), embedded)?),
+                None => app.shell().sidecar("truck-save-server")?,
+            };
+            let (_rx, child) = server.env("PORT", port.to_string()).spawn()?;
             app.state::<Backend>()
                 .child
                 .lock()

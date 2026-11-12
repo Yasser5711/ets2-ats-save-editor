@@ -10,7 +10,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "package": "turbo run package",
+    "package": "turbo run build --filter=@truck/web --filter=@truck/server && pnpm --filter @truck/desktop portable",
     "app": "turbo run build && node packages/server/dist/index.js",
     "dev:web": "pnpm --filter @truck/web dev",
     "lint": "oxlint",

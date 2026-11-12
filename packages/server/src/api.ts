@@ -125,6 +125,7 @@ export function saveDetail(path: string) {
     units: loaded.doc.units.length,
     summary: summarize(loaded.doc),
     discovery: discoverySummary(loaded.doc),
+    discoveredItems: getArray(economy, "discovered_items").length,
     cities: allCities(loaded.doc).length,
     drivers: getArray(player, "drivers").length,
     idleDrivers: countIdleDrivers(loaded.doc),

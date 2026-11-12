@@ -68,6 +68,7 @@ export interface SaveDetail {
   units: number;
   summary: Summary;
   discovery: string;
+  discoveredItems: number;
   cities: number;
   drivers: number;
   idleDrivers: number;

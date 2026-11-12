@@ -4,6 +4,16 @@ on:
   push:
     branches: [master]
   pull_request:
+    # The release pull request only touches these files, and it is opened by the
+    # workflow token: runs it triggers wait for a manual approval and are marked
+    # failed after 30 days. Its commits were already tested when they reached
+    # master, so a pull request that changes nothing else starts no run.
+    paths-ignore:
+      - CHANGELOG.md
+      - .release-please-manifest.json
+      - "**/package.json"
+      - packages/desktop/src-tauri/tauri.conf.json
+      - packages/desktop/src-tauri/Cargo.toml
 
 permissions:
   contents: read
@@ -34,81 +44,5 @@ jobs:
 
       - run: pnpm build
 
-  package:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - run: pnpm install --frozen-lockfile
-
-      - run: pnpm package
-
-      - name: smoke test the executable
-        shell: pwsh
-        run: |
-          $solo = New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/solo" -Force
-          Copy-Item release/truck-save-editor.exe $solo
-          $proc = Start-Process -FilePath "$solo/truck-save-editor.exe" -WorkingDirectory $solo -PassThru
-          try {
-            $page = $null
-            foreach ($attempt in 1..20) {
-              Start-Sleep -Seconds 1
-              try {
-                $page = Invoke-WebRequest -Uri http://127.0.0.1:7311/ -UseBasicParsing
-                if ($page.StatusCode -eq 200) { break }
-              } catch { $page = $null }
-            }
-            if ($null -eq $page) { throw "server did not answer on port 7311" }
-            if ($page.Content -notmatch "Truck Save Editor") { throw "the ui was not embedded in the executable" }
-            Invoke-WebRequest -Uri http://127.0.0.1:7311/api/env -UseBasicParsing | Out-Null
-          } finally {
-            Stop-Process -Id $proc.Id -Force
-          }
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: truck-save-editor-windows
-          path: release/truck-save-editor.exe
-
-  desktop:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: packages/desktop/src-tauri
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: bundle the desktop app
-        run: pnpm desktop:build
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: truck-save-editor-desktop
-          path: packages/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+  windows:
+    uses: ./.github/workflows/windows.yml

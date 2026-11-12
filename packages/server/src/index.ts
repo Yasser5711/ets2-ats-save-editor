@@ -18,12 +18,6 @@ import {
   type Ops,
 } from "./api.ts";
 
-declare global {
-  var __WEB_ASSETS: Record<string, string> | undefined; // eslint-disable-line no-underscore-dangle -- injected by the packaged build
-}
-
-// eslint-disable-next-line no-underscore-dangle -- injected by the packaged build
-const EMBEDDED = globalThis.__WEB_ASSETS;
 const WEB_ROOT =
   [
     join(process.cwd(), "packages", "web", "dist"),
@@ -107,14 +101,6 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL): P
 
 function serveStatic(res: ServerResponse, pathname: string): void {
   const requested = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  if (EMBEDDED) {
-    const name = EMBEDDED[requested] === undefined ? "index.html" : requested;
-    const payload = EMBEDDED[name];
-    if (payload === undefined) return send(res, 500, "no web assets were embedded in this build");
-    res.writeHead(200, { "content-type": MIME[extname(name)] ?? "application/octet-stream" });
-    res.end(Buffer.from(payload, "base64"));
-    return;
-  }
   const target = join(WEB_ROOT, requested);
   const chosen = existsSync(target) && extname(target) !== "" ? target : join(WEB_ROOT, "index.html");
   if (WEB_ROOT === "" || !existsSync(chosen)) {

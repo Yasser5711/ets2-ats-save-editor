@@ -25,16 +25,6 @@
         "test/**"
       ]
     },
-    "package": {
-      "dependsOn": [
-        "build",
-        "^build"
-      ],
-      "outputs": [
-        "../../release/**"
-      ],
-      "cache": false
-    },
     "desktop": {
       "cache": false,
       "persistent": true

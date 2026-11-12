@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tauri dev",
     "tauri": "tauri",
-    "bundle": "node scripts/build-sidecar.mjs && tauri build"
+    "bundle": "node scripts/build-sidecar.mjs && tauri build",
+    "portable": "node scripts/build-sidecar.mjs && tauri build --no-bundle --features portable && node scripts/collect-portable.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.9.6"
