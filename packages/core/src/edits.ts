@@ -212,9 +212,14 @@ export function validate(doc: SiiDocument): string[] {
       const claimed = key === "vehicles" ? claimedTrucks : claimedDrivers;
       for (const ref of slots) {
         if (ref === "null") continue;
-        if (idx.byIdOrNull(ref) === null) {
+        const unit = idx.byIdOrNull(ref);
+        if (unit === null) {
           problems.push(`${g.id}: ${key} slot points at missing unit ${ref}`);
         }
+        // The player's own record (not driver_ai) can sit in more than one
+        // owned garage; the game UI only shows you once and does not treat
+        // that as a conflict. Hired AI drivers must stay unique.
+        if (key === "drivers" && unit !== null && unit.cls !== "driver_ai") continue;
         const owner = claimed.get(ref);
         if (owner !== undefined) problems.push(`${ref} is in both ${owner} and ${g.id}`);
         else claimed.set(ref, g.id);
