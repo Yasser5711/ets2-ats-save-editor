@@ -195,6 +195,66 @@ test.skipIf(!hasSandbox)("max skills covers the coach skills and coach experienc
   expect(get(economy, "long_dist")).toBe("6");
 });
 
+test("the player may appear in two garage slots; a hired driver may not", () => {
+  const playerId = "driver.player";
+  const hiredId = "_nameless.hired";
+  const doc = {
+    units: [
+      {
+        cls: "economy",
+        id: "economy",
+        lines: [
+          { key: "bank", index: null, value: "null" },
+          { key: "player", index: null, value: "null" },
+          { key: "game_progress", index: null, value: "null" },
+          { key: "event_queue", index: null, value: "null" },
+        ],
+      },
+      { cls: "driver", id: playerId, lines: [] },
+      {
+        cls: "driver_ai",
+        id: hiredId,
+        lines: [{ key: "assigned_truck", index: null, value: "null" }],
+      },
+      {
+        cls: "garage",
+        id: "garage.hamburg",
+        lines: [
+          { key: "status", index: null, value: "6" },
+          { key: "vehicles", index: null, value: "1" },
+          { key: "vehicles", index: 0, value: "null" },
+          { key: "drivers", index: null, value: "1" },
+          { key: "drivers", index: 0, value: playerId },
+        ],
+      },
+      {
+        cls: "garage",
+        id: "garage.klagenfurt",
+        lines: [
+          { key: "status", index: null, value: "6" },
+          { key: "vehicles", index: null, value: "1" },
+          { key: "vehicles", index: 0, value: "null" },
+          { key: "drivers", index: null, value: "1" },
+          { key: "drivers", index: 0, value: playerId },
+        ],
+      },
+    ],
+  };
+  expect(validate(doc).filter((p) => p.includes("is in both"))).toEqual([]);
+
+  setArray(
+    doc.units.find((u) => u.id === "garage.klagenfurt")!,
+    "drivers",
+    [hiredId],
+  );
+  setArray(
+    doc.units.find((u) => u.id === "garage.hamburg")!,
+    "drivers",
+    [hiredId],
+  );
+  expect(validate(doc).some((p) => p.includes(`${hiredId} is in both`))).toBeTruthy();
+});
+
 test.skipIf(!hasSandbox)("a garage slot may hold the player without a truck, a hired driver may not", () => {
   const doc = loadSii(SANDBOX).doc;
   const idx = new SiiIndex(doc);
